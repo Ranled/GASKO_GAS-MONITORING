@@ -60,6 +60,18 @@
       </div>
     </div>
     <p style="color: #475569; font-size: 0.75rem; margin-top: 2rem;">GasKo v<span id="maint-version">1.0</span></p>
+    <button onclick="
+      const code = prompt('Enter dev access code:');
+      if (code === 'BOSSRAIAN') {
+        document.getElementById('maintenance-overlay').style.display = 'none';
+      } else if (code !== null) {
+        alert('Invalid code.');
+      }
+    " style="
+      margin-top: 1.5rem; background: none; border: none;
+      color: #334155; font-size: 0.65rem; cursor: pointer;
+      opacity: 0.4; transition: opacity 0.3s;
+    " onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='0.4'">🔑 Dev Access</button>
   </div>
   <style>
     @keyframes spin { 0%,100%{transform:rotate(0deg)} 25%{transform:rotate(-20deg)} 75%{transform:rotate(20deg)} }
