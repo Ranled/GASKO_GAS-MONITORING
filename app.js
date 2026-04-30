@@ -18,6 +18,9 @@ const App = {
     this.renderCalibrationLog();
     this.initCharts();
     this.updateChartsData();
+    // Show current version in About section
+    const vEl = document.getElementById('app-version');
+    if (vEl && typeof GASKO_VERSION !== 'undefined') vEl.textContent = 'Version ' + GASKO_VERSION;
     // Init Supabase (offline-safe: falls back to localStorage)
     CloudSync.init();
   },
