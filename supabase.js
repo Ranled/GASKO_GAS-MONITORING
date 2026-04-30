@@ -22,7 +22,16 @@ const CloudSync = {
       return;
     }
     try {
-      sbClient = sbLib.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      sbClient = sbLib.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+          persistSession: true,
+          storageKey: 'gasko-auth-token',
+          storage: window.localStorage,
+          flowType: 'implicit',     // avoids PKCE lock contention in vanilla JS
+          autoRefreshToken: true,
+          detectSessionInUrl: false  // we're not doing OAuth redirects
+        }
+      });
       this.initialized = true;
       console.log('GasKo: Supabase initialized successfully.');
       this.checkSession();
