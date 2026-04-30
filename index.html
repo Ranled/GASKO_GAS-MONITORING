@@ -331,11 +331,40 @@
             <button id="btn-close-modal" class="modal-close">&times;</button>
           </div>
           <div class="modal-body">
+            <!-- Replay Control Panel -->
+            <div id="replay-panel" class="replay-panel hidden">
+              <div class="replay-info">
+                <div class="replay-stat">
+                  <span class="replay-label">Speed</span>
+                  <span class="replay-value" id="replay-speed-display">0 km/h</span>
+                </div>
+                <div class="replay-stat">
+                  <span class="replay-label">Time</span>
+                  <span class="replay-value" id="replay-time-display">--:--:--</span>
+                </div>
+              </div>
+              <input type="range" id="replay-progress" class="replay-progress" min="0" max="100" value="0" readonly>
+              <div class="replay-controls">
+                <label class="replay-label">Speed:</label>
+                <select id="replay-speed" class="replay-speed-select">
+                  <option value="1">1×</option>
+                  <option value="2" selected>2×</option>
+                  <option value="5">5×</option>
+                  <option value="10">10×</option>
+                  <option value="20">20×</option>
+                </select>
+                <button id="btn-stop-replay" class="btn btn-danger btn-sm">⏹ Stop</button>
+              </div>
+            </div>
             <div id="trip-detail-map" class="trip-detail-map"></div>
             <div id="trip-detail-stats" class="trip-detail-stats"></div>
             <div id="trip-detail-insights" class="trip-detail-insights"></div>
           </div>
           <div class="modal-footer">
+            <button id="btn-replay-trip" class="btn btn-outline" style="display:none">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Replay Trip
+            </button>
             <button id="btn-delete-trip" class="btn btn-danger">Delete Trip</button>
           </div>
         </div>

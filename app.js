@@ -308,20 +308,31 @@ const App = {
 
     // Map
     const mapDiv = document.getElementById('trip-detail-map');
-    if (this.detailMap) this.detailMap.remove();
+    if (this.detailMap) { this.detailMap.remove(); this.detailMap = null; }
     this.detailMap = L.map(mapDiv, { zoomControl: false }).setView([14.5995, 120.9842], 13);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 19 }).addTo(this.detailMap);
     if (trip.route && trip.route.length > 0) {
       const latlngs = trip.route.map(p => [p.lat, p.lng]);
-      L.polyline(latlngs, { color: '#a855f7', weight: 3 }).addTo(this.detailMap);
+      L.polyline(latlngs, { color: '#a855f7', weight: 3, opacity: 0.6 }).addTo(this.detailMap);
       this.detailMap.fitBounds(latlngs);
-      L.circleMarker(latlngs[0], { radius: 6, color: '#4ade80', fillOpacity: 1 }).addTo(this.detailMap);
-      L.circleMarker(latlngs[latlngs.length-1], { radius: 6, color: '#f43f5e', fillOpacity: 1 }).addTo(this.detailMap);
+      L.circleMarker(latlngs[0], { radius: 8, color: '#4ade80', fillColor: '#4ade80', fillOpacity: 1 }).bindTooltip('Start').addTo(this.detailMap);
+      L.circleMarker(latlngs[latlngs.length-1], { radius: 8, color: '#f43f5e', fillColor: '#f43f5e', fillOpacity: 1 }).bindTooltip('End').addTo(this.detailMap);
     }
     setTimeout(() => this.detailMap.invalidateSize(), 200);
 
+    // Replay button visibility
+    const hasRoute = trip.route && trip.route.length > 1;
+    const replayBtn = document.getElementById('btn-replay-trip');
+    if (replayBtn) {
+      replayBtn.style.display = hasRoute ? 'flex' : 'none';
+      replayBtn.onclick = () => this.startReplay(trip);
+    }
+
     // Close & delete handlers
-    const closeModal = () => modal.classList.add('hidden');
+    const closeModal = () => {
+      this.stopReplay();
+      modal.classList.add('hidden');
+    };
     document.getElementById('btn-close-modal').onclick = closeModal;
     modal.querySelector('.modal-overlay').onclick = closeModal;
     document.getElementById('btn-delete-trip').onclick = () => {
@@ -332,6 +343,101 @@ const App = {
       this.updateChartsData();
       this.toast('Trip deleted', 'info');
     };
+  },
+
+  // ---- Trip Replay ----
+  _replay: { interval: null, index: 0, marker: null, speed: 1 },
+
+  startReplay(trip) {
+    this.stopReplay();
+    const route = trip.route;
+    if (!route || route.length < 2) { this.toast('No GPS data for this trip', 'info'); return; }
+
+    // Show replay panel
+    const panel = document.getElementById('replay-panel');
+    panel.classList.remove('hidden');
+
+    // Reset state
+    this._replay.index = 0;
+    this._replay.speed = parseInt(document.getElementById('replay-speed')?.value || '2');
+
+    // Create animated marker
+    const startLatLng = [route[0].lat, route[0].lng];
+    this._replay.marker = L.circleMarker(startLatLng, {
+      radius: 10, color: '#22d3ee', fillColor: '#22d3ee', fillOpacity: 0.9,
+      className: 'replay-marker-pulse'
+    }).addTo(this.detailMap);
+    this.detailMap.setView(startLatLng, 16);
+
+    // Draw ghost route
+    const fullRoute = route.map(p => [p.lat, p.lng]);
+    const ghostLine = L.polyline(fullRoute, { color: '#22d3ee', weight: 3, opacity: 0.3, dashArray: '4 6' }).addTo(this.detailMap);
+    const activeLine = L.polyline([], { color: '#22d3ee', weight: 4, opacity: 0.9 }).addTo(this.detailMap);
+    this._replay._ghostLine = ghostLine;
+    this._replay._activeLine = activeLine;
+
+    const totalPts = route.length;
+    const progressBar = document.getElementById('replay-progress');
+    const speedDisplay = document.getElementById('replay-speed-display');
+    const timeDisplay = document.getElementById('replay-time-display');
+
+    const step = () => {
+      const i = this._replay.index;
+      if (i >= totalPts) { this.stopReplay(); return; }
+
+      const pt = route[i];
+      const latlng = [pt.lat, pt.lng];
+      this._replay.marker.setLatLng(latlng);
+      this.detailMap.panTo(latlng, { animate: true, duration: 0.3 });
+
+      // Extend active line
+      activeLine.addLatLng(latlng);
+
+      // Calculate speed from position diff
+      let spd = 0;
+      if (i > 0 && route[i].time && route[i-1].time) {
+        const dt = (route[i].time - route[i-1].time) / 1000; // seconds
+        const distKm = GasKo.haversine(route[i-1].lat, route[i-1].lng, pt.lat, pt.lng);
+        spd = dt > 0 ? Math.round((distKm / dt) * 3600) : 0;
+      }
+
+      // Update UI
+      if (progressBar) progressBar.value = Math.round((i / (totalPts - 1)) * 100);
+      if (speedDisplay) speedDisplay.textContent = spd + ' km/h';
+      if (timeDisplay && route[i].time) {
+        const t = new Date(route[i].time);
+        timeDisplay.textContent = t.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      }
+
+      this._replay.index++;
+    };
+
+    // Interval speed = 500ms / playback multiplier
+    const interval = Math.max(50, Math.round(500 / this._replay.speed));
+    this._replay.interval = setInterval(step, interval);
+
+    // Speed selector
+    document.getElementById('replay-speed')?.addEventListener('change', e => {
+      clearInterval(this._replay.interval);
+      this._replay.speed = parseInt(e.target.value);
+      const newInterval = Math.max(50, Math.round(500 / this._replay.speed));
+      this._replay.interval = setInterval(step, newInterval);
+    });
+
+    document.getElementById('btn-stop-replay').onclick = () => this.stopReplay();
+    this.toast('Replaying trip...', 'info');
+  },
+
+  stopReplay() {
+    if (this._replay.interval) { clearInterval(this._replay.interval); this._replay.interval = null; }
+    if (this._replay.marker && this.detailMap) {
+      try { this.detailMap.removeLayer(this._replay.marker); } catch(e) {}
+      this._replay.marker = null;
+    }
+    if (this._replay._ghostLine && this.detailMap) { try { this.detailMap.removeLayer(this._replay._ghostLine); } catch(e) {} }
+    if (this._replay._activeLine && this.detailMap) { try { this.detailMap.removeLayer(this._replay._activeLine); } catch(e) {} }
+    const panel = document.getElementById('replay-panel');
+    if (panel) panel.classList.add('hidden');
   },
 
   // ---- Calibration ----
