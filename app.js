@@ -484,35 +484,46 @@ const App = {
   // ---- Auth ----
   bindAuth() {
     // Tab switching
-    document.getElementById('tab-login')?.addEventListener('click', () => {
+    const showLogin = () => {
       document.getElementById('tab-login').classList.add('active');
       document.getElementById('tab-signup').classList.remove('active');
-      document.getElementById('form-login').style.display = 'block';
+      document.getElementById('form-login').style.display = 'flex';
       document.getElementById('form-signup').style.display = 'none';
-    });
-    document.getElementById('tab-signup')?.addEventListener('click', () => {
+    };
+    const showSignup = () => {
       document.getElementById('tab-signup').classList.add('active');
       document.getElementById('tab-login').classList.remove('active');
-      document.getElementById('form-signup').style.display = 'block';
+      document.getElementById('form-signup').style.display = 'flex';
       document.getElementById('form-login').style.display = 'none';
-    });
+    };
+    document.getElementById('tab-login')?.addEventListener('click', showLogin);
+    document.getElementById('tab-signup')?.addEventListener('click', showSignup);
 
-    // Login
+    // Sign In — use button click, not form submit (avoids hidden required field issue)
     document.getElementById('form-login')?.addEventListener('submit', async e => {
       e.preventDefault();
-      const email = document.getElementById('login-email').value;
+      const email = document.getElementById('login-email').value.trim();
       const pw = document.getElementById('login-password').value;
+      if (!email || !pw) { this.toast('Enter email and password', 'error'); return; }
+      const btn = e.submitter || e.target.querySelector('button[type=submit]');
+      if (btn) btn.textContent = 'Signing in...';
       await CloudSync.signIn(email, pw);
+      if (btn) btn.textContent = 'Sign In';
     });
 
-    // Signup
+    // Sign Up — use button click with manual validation
     document.getElementById('form-signup')?.addEventListener('submit', async e => {
       e.preventDefault();
-      const email = document.getElementById('signup-email').value;
+      const email = document.getElementById('signup-email').value.trim();
       const pw = document.getElementById('signup-password').value;
       const pw2 = document.getElementById('signup-password2').value;
+      if (!email || !pw) { this.toast('Enter email and password', 'error'); return; }
       if (pw !== pw2) { this.toast('Passwords do not match', 'error'); return; }
+      if (pw.length < 6) { this.toast('Password must be at least 6 characters', 'error'); return; }
+      const btn = e.submitter || e.target.querySelector('button[type=submit]');
+      if (btn) btn.textContent = 'Creating...';
       await CloudSync.signUp(email, pw);
+      if (btn) btn.textContent = 'Create Account';
     });
 
     // Sign out

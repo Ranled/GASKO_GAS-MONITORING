@@ -13,20 +13,23 @@ const CloudSync = {
 
   // ---- Initialize Supabase ----
   init() {
-    if (typeof window.supabase === 'undefined' || !window.supabase.createClient) {
-      console.warn('Supabase SDK not loaded, running in offline mode');
+    // The Supabase CDN UMD bundle exposes `supabase.createClient` directly on window
+    const sbLib = window.supabase;
+    if (!sbLib || typeof sbLib.createClient !== 'function') {
+      console.error('GasKo: Supabase SDK not loaded. Check CDN script tag.');
       this.initialized = false;
       return;
     }
-    if (SUPABASE_ANON_KEY === 'YOUR_ANON_KEY_HERE') {
-      console.warn('Supabase anon key not set, running in offline mode');
+    try {
+      supabase = sbLib.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      this.initialized = true;
+      console.log('GasKo: Supabase initialized successfully.');
+      this.checkSession();
+      this.listenAuthChanges();
+    } catch(e) {
+      console.error('GasKo: Supabase init error:', e);
       this.initialized = false;
-      return;
     }
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    this.initialized = true;
-    this.checkSession();
-    this.listenAuthChanges();
   },
 
   // ---- Auth State ----
@@ -62,19 +65,41 @@ const CloudSync = {
 
   // ---- Sign Up ----
   async signUp(email, password) {
-    if (!this.initialized) { App.toast('Cloud sync not available', 'error'); return; }
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) { App.toast(error.message, 'error'); return null; }
-    App.toast('Check your email to confirm your account!', 'success');
-    return data;
+    console.log('GasKo: signUp called', email);
+    if (!this.initialized) {
+      App.toast('Cloud sync unavailable — check connection', 'error');
+      console.error('GasKo: signUp failed — not initialized');
+      return;
+    }
+    try {
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      console.log('GasKo: signUp result', { data, error });
+      if (error) { App.toast(error.message, 'error'); return null; }
+      App.toast('Account created! Check your email to confirm.', 'success');
+      return data;
+    } catch(e) {
+      console.error('GasKo: signUp exception:', e);
+      App.toast('Sign up failed: ' + e.message, 'error');
+    }
   },
 
   // ---- Sign In ----
   async signIn(email, password) {
-    if (!this.initialized) { App.toast('Cloud sync not available', 'error'); return; }
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) { App.toast(error.message, 'error'); return null; }
-    return data;
+    console.log('GasKo: signIn called', email);
+    if (!this.initialized) {
+      App.toast('Cloud sync unavailable — check connection', 'error');
+      console.error('GasKo: signIn failed — not initialized');
+      return;
+    }
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      console.log('GasKo: signIn result', { data, error });
+      if (error) { App.toast(error.message, 'error'); return null; }
+      return data;
+    } catch(e) {
+      console.error('GasKo: signIn exception:', e);
+      App.toast('Sign in failed: ' + e.message, 'error');
+    }
   },
 
   // ---- Sign Out ----
