@@ -62,17 +62,14 @@ const GasKo = {
     if (st.positions.length < 3) return eff;
 
     let modifier = 0;
-    // High speed penalty
     const highRatio = st.highSpeedCount / Math.max(st.positions.length, 1);
     if (highRatio > 0.3) modifier -= eff * 0.12;
     else if (highRatio > 0.1) modifier -= eff * 0.06;
 
-    // Stop frequency penalty
     const stopRatio = st.stopCount / Math.max(st.positions.length, 1);
     if (stopRatio > 0.25) modifier -= eff * 0.10;
     else if (stopRatio > 0.1) modifier -= eff * 0.05;
 
-    // Smooth driving bonus
     if (highRatio < 0.05 && stopRatio < 0.08) modifier += eff * 0.05;
 
     return Math.max(eff + modifier, 1);
@@ -106,7 +103,7 @@ const GasKo = {
     if (st.positions.length > 0) {
       const last = st.positions[st.positions.length - 1];
       const d = this.haversine(last.lat, last.lng, lat, lng);
-      if (d > 0.001) { // filter GPS jitter < 1m
+      if (d > 0.001) {
         st.totalDistance += d;
         st.positions.push({ lat, lng, time: Date.now() });
       }
@@ -138,7 +135,6 @@ const GasKo = {
   startSimulation() {
     if (this.state.simulating) return;
     this.state = { ...this.state, simulating: true, tracking: true, positions: [], totalDistance: 0, currentSpeed: 0, maxSpeed: 0, tripStart: Date.now(), stopCount: 0, highSpeedCount: 0, lastSpeed: 0 };
-    // Start near Manila
     let lat = 14.5995, lng = 120.9842;
     const self = this;
     this.state.simInterval = setInterval(() => {
@@ -146,7 +142,7 @@ const GasKo = {
       const dist = 0.0003 + Math.random() * 0.0008;
       lat += Math.cos(angle) * dist;
       lng += Math.sin(angle) * dist;
-      const speed = (15 + Math.random() * 45) / 3.6; // 15-60 km/h in m/s
+      const speed = (15 + Math.random() * 45) / 3.6;
       self.onPosition(lat, lng, speed);
       App.updateDashboard();
     }, 1500);
@@ -181,7 +177,7 @@ const GasKo = {
       maxSpeed: st.maxSpeed,
       efficiencyUsed: this.getAdjustedEfficiency(),
       drivingScore: Math.max(0, Math.min(100, 80 + (this.getAdjustedEfficiency() - this.getSettings().efficiency) / this.getSettings().efficiency * 100)),
-      route: st.positions.slice(0, 500), // cap stored points
+      route: st.positions.slice(0, 500),
       behaviorInsight: insight ? insight.text : '',
       duration: duration
     };
@@ -199,7 +195,6 @@ const GasKo = {
     logs.unshift({ id: Date.now(), fuelAdded, distance: distKm, efficiency: newEff, odometer: odometer || null, notes: notes || '', date: Date.now() });
     this.saveFuelLogs(logs);
 
-    // Update vehicle efficiency (weighted average with history)
     const s = this.getSettings();
     s.efficiency = Math.round(((s.efficiency * 0.3) + (newEff * 0.7)) * 100) / 100;
     this.saveSettings(s);
@@ -207,14 +202,17 @@ const GasKo = {
   },
 
   // ---- CSV Export ----
+  // Format: raw ms timestamps + base64-encoded GPS route for 100% accurate re-import
   exportCSV() {
     const trips = this.getTrips();
     if (!trips.length) { App.toast('No data to export', 'info'); return; }
-    // Include both human-readable date AND raw timestamp for reliable re-import
-    let csv = 'Trip ID,Date,Timestamp,Distance (km),Fuel Used (L),Cost (PHP),Avg Speed (km/h),Max Speed (km/h),Efficiency Used (km/L),Driving Score,Duration (min)\n';
+    let csv = 'Trip ID,Date,StartTime_ms,EndTime_ms,Duration_ms,Distance (km),Fuel Used (L),Cost (PHP),Fuel Price,Avg Speed (km/h),Max Speed (km/h),Efficiency Used (km/L),Driving Score,Route_b64\n';
     trips.forEach(t => {
-      const date = new Date(t.startTime);
-      csv += `${t.id},"${date.toLocaleString()}",${t.startTime},${t.distance.toFixed(2)},${t.fuelUsed.toFixed(2)},${t.cost.toFixed(2)},${(t.avgSpeed||0).toFixed(1)},${(t.maxSpeed||0).toFixed(1)},${(t.efficiencyUsed||0).toFixed(1)},${(t.drivingScore||0).toFixed(0)},${((t.duration||0)/60000).toFixed(1)}\n`;
+      const date = new Date(t.startTime).toISOString();
+      const routeB64 = (t.route && t.route.length > 0)
+        ? btoa(unescape(encodeURIComponent(JSON.stringify(t.route))))
+        : '';
+      csv += `${t.id},${date},${t.startTime},${t.endTime || ''},${t.duration || ''},${t.distance.toFixed(4)},${t.fuelUsed.toFixed(4)},${t.cost.toFixed(4)},${t.fuelPrice || 0},${(t.avgSpeed||0).toFixed(2)},${(t.maxSpeed||0).toFixed(2)},${(t.efficiencyUsed||0).toFixed(2)},${(t.drivingScore||0).toFixed(1)},${routeB64}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
@@ -225,33 +223,38 @@ const GasKo = {
   },
 
   // ---- CSV Import ----
+  // Supports: new format (StartTime_ms, Route_b64) AND all legacy formats
   importCSV(csvText) {
     const lines = csvText.trim().split('\n');
     if (lines.length < 2) { App.toast('CSV file is empty or invalid', 'error'); return 0; }
 
-    const header = lines[0].toLowerCase();
-    const isGaskoFormat = header.includes('trip id') && header.includes('distance');
-    if (!isGaskoFormat) {
-      App.toast('Invalid CSV format. Use a GasKo-exported file.', 'error');
+    const rawHeader = lines[0];
+    const header = rawHeader.toLowerCase();
+    if (!header.includes('trip id') || !header.includes('distance')) {
+      App.toast('Invalid CSV: use a GasKo-exported file.', 'error');
       return 0;
     }
 
-    // Detect new format (has Timestamp column) vs old format
-    const hasTimestamp = header.includes('timestamp');
-    const cols = header.split(',');
-    const idxId = cols.findIndex(c => c.includes('trip id'));
-    const idxTimestamp = cols.findIndex(c => c.includes('timestamp'));
-    const idxDate = cols.findIndex(c => c === 'date');
-    // Offset: new format has extra Timestamp column, shifting numeric columns by 1
-    const offset = hasTimestamp ? 1 : 0;
-    const idxDist = 2 + offset;
-    const idxFuel = 3 + offset;
-    const idxCost = 4 + offset;
-    const idxAvgSpd = 5 + offset;
-    const idxMaxSpd = 6 + offset;
-    const idxEff = 7 + offset;
-    const idxScore = 8 + offset;
-    const idxDur = 9 + offset;
+    // Dynamic column mapping — works for all GasKo CSV versions
+    const headerCols = rawHeader.split(',').map(c => c.trim().toLowerCase());
+    const col = name => headerCols.findIndex(c => c.includes(name));
+
+    const idxId        = col('trip id');
+    const idxDate      = col('date');
+    const idxStart     = col('starttime_ms');
+    const idxEnd       = col('endtime_ms');
+    const idxDurMs     = col('duration_ms');
+    const idxTimestamp = col('timestamp');       // legacy v2
+    const idxDurMin    = col('duration (min)');  // legacy v1
+    const idxDist      = col('distance');
+    const idxFuel      = col('fuel used');
+    const idxCost      = col('cost');
+    const idxFuelPx    = col('fuel price');
+    const idxAvgSpd    = col('avg speed');
+    const idxMaxSpd    = col('max speed');
+    const idxEff       = col('efficiency');
+    const idxScore     = col('driving score');
+    const idxRoute     = col('route_b64');
 
     const existing = this.getTrips();
     const existingIds = new Set(existing.map(t => t.id));
@@ -261,48 +264,55 @@ const GasKo = {
       const line = lines[i].trim();
       if (!line) continue;
 
-      // Parse CSV respecting quoted fields
-      const parsedCols = [];
-      let inQuote = false, cur = '';
-      for (let ch of line + ',') {
-        if (ch === '"') { inQuote = !inQuote; }
-        else if (ch === ',' && !inQuote) { parsedCols.push(cur.trim()); cur = ''; }
+      // Proper quoted CSV parser — handles commas inside quoted fields
+      const p = [];
+      let inQ = false, cur = '';
+      for (const ch of line + ',') {
+        if (ch === '"') { inQ = !inQ; }
+        else if (ch === ',' && !inQ) { p.push(cur); cur = ''; }
         else { cur += ch; }
       }
+      if (p.length < 5) continue;
 
-      if (parsedCols.length < 10) continue;
-
-      const id = parsedCols[idxId];
+      const id = (p[idxId] || '').trim();
       if (!id || existingIds.has(id)) continue;
 
-      // Use raw numeric timestamp if available (accurate), otherwise parse date string
-      let startTime;
-      if (hasTimestamp && parsedCols[idxTimestamp]) {
-        startTime = parseInt(parsedCols[idxTimestamp], 10);
-      } else {
-        startTime = Date.parse(parsedCols[idxDate]) || Date.now();
-      }
+      // Timestamps — prefer raw ms, fall back to ISO string, then locale string
+      let startTime = 0;
+      if (idxStart >= 0 && p[idxStart]) startTime = parseInt(p[idxStart], 10);
+      if (!startTime && idxTimestamp >= 0 && p[idxTimestamp]) startTime = parseInt(p[idxTimestamp], 10);
+      if (!startTime && idxDate >= 0 && p[idxDate]) startTime = new Date(p[idxDate].trim()).getTime() || 0;
       if (!startTime || isNaN(startTime)) startTime = Date.now();
 
-      const durationMs = (parseFloat(parsedCols[idxDur]) || 0) * 60000;
+      let endTime = 0;
+      if (idxEnd >= 0 && p[idxEnd]) endTime = parseInt(p[idxEnd], 10) || 0;
 
-      const trip = {
-        id,
-        startTime,
-        endTime: startTime + durationMs,
-        distance: parseFloat(parsedCols[idxDist]) || 0,
-        fuelUsed: parseFloat(parsedCols[idxFuel]) || 0,
-        cost: parseFloat(parsedCols[idxCost]) || 0,
-        fuelPrice: this.getSettings().fuelPrice,
-        avgSpeed: parseFloat(parsedCols[idxAvgSpd]) || 0,
-        maxSpeed: parseFloat(parsedCols[idxMaxSpd]) || 0,
-        efficiencyUsed: parseFloat(parsedCols[idxEff]) || 0,
-        drivingScore: parseFloat(parsedCols[idxScore]) || 0,
-        duration: durationMs,
-        route: [],
-        behaviorInsight: 'Imported from CSV'
-      };
-      existing.push(trip);
+      let durationMs = 0;
+      if (idxDurMs >= 0 && p[idxDurMs]) durationMs = parseInt(p[idxDurMs], 10) || 0;
+      else if (idxDurMin >= 0 && p[idxDurMin]) durationMs = Math.round(parseFloat(p[idxDurMin]) * 60000) || 0;
+      if (!endTime && durationMs) endTime = startTime + durationMs;
+      if (!durationMs && endTime > startTime) durationMs = endTime - startTime;
+
+      // Route — decode base64 JSON for GPS replay
+      let route = [];
+      if (idxRoute >= 0 && p[idxRoute] && p[idxRoute].trim()) {
+        try { route = JSON.parse(decodeURIComponent(escape(atob(p[idxRoute].trim())))); }
+        catch(e) { route = []; }
+      }
+
+      existing.push({
+        id, startTime, endTime, duration: durationMs,
+        distance:       idxDist   >= 0 ? (parseFloat(p[idxDist])   || 0) : 0,
+        fuelUsed:       idxFuel   >= 0 ? (parseFloat(p[idxFuel])   || 0) : 0,
+        cost:           idxCost   >= 0 ? (parseFloat(p[idxCost])   || 0) : 0,
+        fuelPrice:      idxFuelPx >= 0 ? (parseFloat(p[idxFuelPx]) || this.getSettings().fuelPrice) : this.getSettings().fuelPrice,
+        avgSpeed:       idxAvgSpd >= 0 ? (parseFloat(p[idxAvgSpd]) || 0) : 0,
+        maxSpeed:       idxMaxSpd >= 0 ? (parseFloat(p[idxMaxSpd]) || 0) : 0,
+        efficiencyUsed: idxEff    >= 0 ? (parseFloat(p[idxEff])    || 0) : 0,
+        drivingScore:   idxScore  >= 0 ? (parseFloat(p[idxScore])  || 0) : 0,
+        route,
+        behaviorInsight: route.length > 0 ? 'Imported from CSV (with GPS)' : 'Imported from CSV'
+      });
       existingIds.add(id);
       imported++;
     }

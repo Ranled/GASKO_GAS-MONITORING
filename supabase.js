@@ -27,9 +27,11 @@ const CloudSync = {
           persistSession: true,
           storageKey: 'gasko-auth-token',
           storage: window.localStorage,
-          flowType: 'implicit',     // avoids PKCE lock contention in vanilla JS
+          flowType: 'implicit',
           autoRefreshToken: true,
-          detectSessionInUrl: false  // we're not doing OAuth redirects
+          detectSessionInUrl: false,
+          // Disable Web Locks — eliminates the 5-second lock delay in vanilla JS
+          lock: (_name, _timeout, fn) => fn()
         }
       });
       this.initialized = true;
