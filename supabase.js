@@ -112,70 +112,91 @@ const CloudSync = {
   // ---- Ensure Vehicle Exists ----
   async ensureVehicle() {
     if (!this.initialized || !this.user) return;
-    const { data: vehicles } = await sbClient
-      .from('vehicles')
-      .select('id, name, fuel_efficiency, fuel_price, fuel_type, tank_capacity, last_odometer')
-      .eq('user_id', this.user.id)
-      .limit(1);
+    try {
+      const { data: vehicles, error } = await sbClient
+        .from('vehicles')
+        .select('id, name, fuel_efficiency, fuel_price, fuel_type, tank_capacity, last_odometer')
+        .eq('user_id', this.user.id)
+        .limit(1);
 
-    if (vehicles && vehicles.length > 0) {
-      this.vehicleId = vehicles[0].id;
-      const s = GasKo.getSettings();
-      s.vehicleName = vehicles[0].name;
-      s.efficiency = vehicles[0].fuel_efficiency;
-      s.fuelPrice = vehicles[0].fuel_price;
-      s.fuelType = vehicles[0].fuel_type;
-      s.tankCapacity = vehicles[0].tank_capacity || 42;
-      GasKo.saveSettings(s);
-    } else {
-      const s = GasKo.getSettings();
-      const { data } = await sbClient.from('vehicles').insert({
-        user_id: this.user.id,
-        name: s.vehicleName,
-        fuel_efficiency: s.efficiency,
-        fuel_price: s.fuelPrice,
-        fuel_type: s.fuelType,
-        tank_capacity: s.tankCapacity || 42,
-        last_odometer: 0
-      }).select().single();
-      if (data) this.vehicleId = data.id;
-    }
+      if (error) { console.error('GasKo: ensureVehicle fetch error:', error.message); return; }
+
+      if (vehicles && vehicles.length > 0) {
+        this.vehicleId = vehicles[0].id;
+        const s = GasKo.getSettings();
+        s.vehicleName = vehicles[0].name;
+        s.efficiency = vehicles[0].fuel_efficiency;
+        s.fuelPrice = vehicles[0].fuel_price;
+        s.fuelType = vehicles[0].fuel_type;
+        s.tankCapacity = vehicles[0].tank_capacity || 42;
+        GasKo.saveSettings(s);
+        console.log('GasKo: Vehicle loaded from cloud, id:', this.vehicleId);
+      } else {
+        const s = GasKo.getSettings();
+        const { data, error: insertErr } = await sbClient.from('vehicles').insert({
+          user_id: this.user.id,
+          name: s.vehicleName,
+          fuel_efficiency: s.efficiency,
+          fuel_price: s.fuelPrice,
+          fuel_type: s.fuelType,
+          tank_capacity: s.tankCapacity || 42,
+          last_odometer: 0
+        }).select().single();
+        if (insertErr) { console.error('GasKo: ensureVehicle insert error:', insertErr.message); return; }
+        if (data) { this.vehicleId = data.id; console.log('GasKo: New vehicle created, id:', this.vehicleId); }
+      }
+    } catch (e) { console.error('GasKo: ensureVehicle exception:', e); }
   },
 
   // ---- Save Trip to Cloud ----
   async saveTrip(trip) {
     if (!this.initialized || !this.user) return;
-    await sbClient.from('trips').insert({
-      user_id: this.user.id,
-      vehicle_id: this.vehicleId,
-      start_time: new Date(trip.startTime).toISOString(),
-      end_time: new Date(trip.endTime).toISOString(),
-      distance_km: trip.distance,
-      fuel_used_liters: trip.fuelUsed,
-      cost: trip.cost,
-      fuel_price: trip.fuelPrice,
-      avg_speed_kmh: trip.avgSpeed || 0,
-      max_speed_kmh: trip.maxSpeed || 0,
-      efficiency_used: trip.efficiencyUsed || 0,
-      driving_score: trip.drivingScore || 0,
-      route_data: trip.route || [],
-      behavior_insight: trip.behaviorInsight || '',
-      duration_ms: trip.duration || 0
-    });
+    try {
+      const { error } = await sbClient.from('trips').insert({
+        user_id: this.user.id,
+        vehicle_id: this.vehicleId,
+        start_time: new Date(trip.startTime).toISOString(),
+        end_time: new Date(trip.endTime).toISOString(),
+        distance_km: trip.distance,
+        fuel_used_liters: trip.fuelUsed,
+        cost: trip.cost,
+        fuel_price: trip.fuelPrice,
+        avg_speed_kmh: trip.avgSpeed || 0,
+        max_speed_kmh: trip.maxSpeed || 0,
+        efficiency_used: trip.efficiencyUsed || 0,
+        driving_score: trip.drivingScore || 0,
+        route_data: trip.route || [],
+        behavior_insight: trip.behaviorInsight || '',
+        duration_ms: trip.duration || 0
+      });
+      if (error) {
+        console.error('GasKo: saveTrip error:', error.message, error.code);
+        App.toast('Cloud save failed: ' + error.message, 'error');
+      } else {
+        console.log('GasKo: Trip saved to cloud ✓');
+      }
+    } catch (e) {
+      console.error('GasKo: saveTrip exception:', e);
+      App.toast('Cloud save failed: ' + e.message, 'error');
+    }
   },
 
   // ---- Save Fuel Log to Cloud ----
   async saveFuelLog(log) {
     if (!this.initialized || !this.user) return;
-    await sbClient.from('fuel_logs').insert({
-      user_id: this.user.id,
-      vehicle_id: this.vehicleId,
-      fuel_added_liters: log.fuelAdded,
-      distance_km: log.distance,
-      computed_efficiency: log.efficiency,
-      odometer_reading: log.odometer || 0,
-      notes: log.notes || ''
-    });
+    try {
+      const { error } = await sbClient.from('fuel_logs').insert({
+        user_id: this.user.id,
+        vehicle_id: this.vehicleId,
+        fuel_added_liters: log.fuelAdded,
+        distance_km: log.distance,
+        computed_efficiency: log.efficiency,
+        odometer_reading: log.odometer || 0,
+        notes: log.notes || ''
+      });
+      if (error) { console.error('GasKo: saveFuelLog error:', error.message); }
+      else { console.log('GasKo: Fuel log saved to cloud ✓'); }
+    } catch (e) { console.error('GasKo: saveFuelLog exception:', e); }
   },
 
   // ---- Update Vehicle Settings in Cloud ----
@@ -246,12 +267,41 @@ const CloudSync = {
 
   // ---- Upload Local Data to Cloud ----
   async uploadLocalData() {
-    if (!this.initialized || !this.user) return;
+    if (!this.initialized || !this.user) {
+      App.toast('Not signed in to cloud', 'error');
+      return;
+    }
+    await this.ensureVehicle();
     const trips = GasKo.getTrips();
     const logs = GasKo.getFuelLogs();
-    for (const trip of trips) await this.saveTrip(trip);
-    for (const log of logs) await this.saveFuelLog(log);
-    App.toast(`Uploaded ${trips.length} trips and ${logs.length} logs to cloud`, 'success');
+    let tripsFailed = 0, logsFailed = 0;
+    App.toast(`Uploading ${trips.length} trips...`, 'info');
+    for (const trip of trips) {
+      try { await this.saveTrip(trip); }
+      catch (e) { tripsFailed++; console.error('Upload trip failed:', e); }
+    }
+    for (const log of logs) {
+      try { await this.saveFuelLog(log); }
+      catch (e) { logsFailed++; console.error('Upload log failed:', e); }
+    }
+    if (tripsFailed + logsFailed === 0) {
+      App.toast(`Uploaded ${trips.length} trips and ${logs.length} logs ✓`, 'success');
+    } else {
+      App.toast(`Upload done. ${tripsFailed} trips and ${logsFailed} logs failed — check console`, 'error');
+    }
+  },
+
+  // ---- Diagnose Cloud Issues ----
+  diagnose() {
+    console.log('=== GasKo Cloud Diagnose ===');
+    console.log('Initialized:', this.initialized);
+    console.log('User:', this.user ? this.user.email : 'NOT SIGNED IN');
+    console.log('Vehicle ID:', this.vehicleId || 'NONE');
+    console.log('Online:', navigator.onLine);
+    if (!this.initialized) console.warn('⚠ Supabase not initialized — check CDN script');
+    if (!this.user) console.warn('⚠ Not signed in — go to Account page and sign in');
+    if (!this.vehicleId) console.warn('⚠ No vehicle — run database.sql in Supabase SQL editor');
+    console.log('============================');
   },
 
   // ---- Update Auth UI ----
