@@ -59,13 +59,16 @@ const CloudSync = {
 
   listenAuthChanges() {
     if (!this.initialized) return;
-    sbClient.auth.onAuthStateChange(async (event, session) => {
+    sbClient.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
         this.user = session.user;
-        await this.ensureVehicle();
+        // Update UI immediately — don't wait for DB operations
         this.updateAuthUI();
-        this.syncFromCloud();
-        App.toast('Signed in! Data syncing...', 'success');
+        App.toast('Signed in! ✓', 'success');
+        // Run DB setup in background — won't block the sign-in
+        this.ensureVehicle()
+          .then(() => this.syncFromCloud())
+          .catch(e => console.error('GasKo: post-signin sync error:', e));
       } else if (event === 'SIGNED_OUT') {
         this.user = null;
         this.vehicleId = null;
@@ -100,17 +103,23 @@ const CloudSync = {
     console.log('GasKo: signIn called', email);
     if (!this.initialized) {
       App.toast('Cloud sync unavailable — check connection', 'error');
-      console.error('GasKo: signIn failed — not initialized');
       return;
     }
+    // Race the sign-in against a 12-second timeout so it never hangs silently
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Sign in timed out — check your internet connection')), 12000)
+    );
     try {
-      const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
+      const { data, error } = await Promise.race([
+        sbClient.auth.signInWithPassword({ email, password }),
+        timeoutPromise
+      ]);
       console.log('GasKo: signIn result', { data, error });
       if (error) { App.toast(error.message, 'error'); return null; }
       return data;
     } catch (e) {
       console.error('GasKo: signIn exception:', e);
-      App.toast('Sign in failed: ' + e.message, 'error');
+      App.toast(e.message, 'error');
     }
   },
 
