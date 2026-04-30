@@ -266,7 +266,6 @@ const App = {
     const cost = GasKo.calcCost(fuel);
     document.getElementById('stat-fuel').textContent = fuel.toFixed(3);
     document.getElementById('stat-cost').textContent = '₱' + cost.toFixed(2);
-    document.getElementById('stat-maxspeed').textContent = Math.round(st.maxSpeed);
 
     // Speed gauge
     const pct = Math.min(st.currentSpeed / 200, 1);
