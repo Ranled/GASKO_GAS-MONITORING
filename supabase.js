@@ -1,10 +1,12 @@
 // ===== GasKo Supabase Integration =====
 // Handles auth, cloud sync, and data persistence
+// NOTE: We use `sbClient` internally to avoid name conflict with the Supabase CDN
+// which declares `window.supabase` globally.
 
 const SUPABASE_URL = 'https://lkyzrbwnzmrceyprmrxp.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxreXpyYnduem1yY2V5cHJtcnhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1MzYwOTcsImV4cCI6MjA5MzExMjA5N30.KXkPN9ZvCuinr9_micQyf8hFjDdFK0pp-NXxWq_Ip4g';
 
-let supabase = null;
+let sbClient = null; // renamed from `supabase` to avoid CDN naming conflict
 
 const CloudSync = {
   user: null,
@@ -13,7 +15,6 @@ const CloudSync = {
 
   // ---- Initialize Supabase ----
   init() {
-    // The Supabase CDN UMD bundle exposes `supabase.createClient` directly on window
     const sbLib = window.supabase;
     if (!sbLib || typeof sbLib.createClient !== 'function') {
       console.error('GasKo: Supabase SDK not loaded. Check CDN script tag.');
@@ -21,12 +22,12 @@ const CloudSync = {
       return;
     }
     try {
-      supabase = sbLib.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      sbClient = sbLib.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       this.initialized = true;
       console.log('GasKo: Supabase initialized successfully.');
       this.checkSession();
       this.listenAuthChanges();
-    } catch(e) {
+    } catch (e) {
       console.error('GasKo: Supabase init error:', e);
       this.initialized = false;
     }
@@ -35,7 +36,7 @@ const CloudSync = {
   // ---- Auth State ----
   async checkSession() {
     if (!this.initialized) return null;
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await sbClient.auth.getSession();
     if (session) {
       this.user = session.user;
       await this.ensureVehicle();
@@ -47,7 +48,7 @@ const CloudSync = {
 
   listenAuthChanges() {
     if (!this.initialized) return;
-    supabase.auth.onAuthStateChange(async (event, session) => {
+    sbClient.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
         this.user = session.user;
         await this.ensureVehicle();
@@ -72,12 +73,12 @@ const CloudSync = {
       return;
     }
     try {
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await sbClient.auth.signUp({ email, password });
       console.log('GasKo: signUp result', { data, error });
       if (error) { App.toast(error.message, 'error'); return null; }
       App.toast('Account created! Check your email to confirm.', 'success');
       return data;
-    } catch(e) {
+    } catch (e) {
       console.error('GasKo: signUp exception:', e);
       App.toast('Sign up failed: ' + e.message, 'error');
     }
@@ -92,11 +93,11 @@ const CloudSync = {
       return;
     }
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
       console.log('GasKo: signIn result', { data, error });
       if (error) { App.toast(error.message, 'error'); return null; }
       return data;
-    } catch(e) {
+    } catch (e) {
       console.error('GasKo: signIn exception:', e);
       App.toast('Sign in failed: ' + e.message, 'error');
     }
@@ -105,13 +106,13 @@ const CloudSync = {
   // ---- Sign Out ----
   async signOut() {
     if (!this.initialized) return;
-    await supabase.auth.signOut();
+    await sbClient.auth.signOut();
   },
 
   // ---- Ensure Vehicle Exists ----
   async ensureVehicle() {
     if (!this.initialized || !this.user) return;
-    const { data: vehicles } = await supabase
+    const { data: vehicles } = await sbClient
       .from('vehicles')
       .select('id, name, fuel_efficiency, fuel_price, fuel_type, tank_capacity, last_odometer')
       .eq('user_id', this.user.id)
@@ -119,7 +120,6 @@ const CloudSync = {
 
     if (vehicles && vehicles.length > 0) {
       this.vehicleId = vehicles[0].id;
-      // Sync vehicle settings to local
       const s = GasKo.getSettings();
       s.vehicleName = vehicles[0].name;
       s.efficiency = vehicles[0].fuel_efficiency;
@@ -128,9 +128,8 @@ const CloudSync = {
       s.tankCapacity = vehicles[0].tank_capacity || 42;
       GasKo.saveSettings(s);
     } else {
-      // Create default vehicle
       const s = GasKo.getSettings();
-      const { data } = await supabase.from('vehicles').insert({
+      const { data } = await sbClient.from('vehicles').insert({
         user_id: this.user.id,
         name: s.vehicleName,
         fuel_efficiency: s.efficiency,
@@ -146,7 +145,7 @@ const CloudSync = {
   // ---- Save Trip to Cloud ----
   async saveTrip(trip) {
     if (!this.initialized || !this.user) return;
-    await supabase.from('trips').insert({
+    await sbClient.from('trips').insert({
       user_id: this.user.id,
       vehicle_id: this.vehicleId,
       start_time: new Date(trip.startTime).toISOString(),
@@ -168,7 +167,7 @@ const CloudSync = {
   // ---- Save Fuel Log to Cloud ----
   async saveFuelLog(log) {
     if (!this.initialized || !this.user) return;
-    await supabase.from('fuel_logs').insert({
+    await sbClient.from('fuel_logs').insert({
       user_id: this.user.id,
       vehicle_id: this.vehicleId,
       fuel_added_liters: log.fuelAdded,
@@ -182,7 +181,7 @@ const CloudSync = {
   // ---- Update Vehicle Settings in Cloud ----
   async updateVehicle(settings) {
     if (!this.initialized || !this.user || !this.vehicleId) return;
-    await supabase.from('vehicles').update({
+    await sbClient.from('vehicles').update({
       name: settings.vehicleName,
       fuel_efficiency: settings.efficiency,
       fuel_price: settings.fuelPrice,
@@ -192,21 +191,12 @@ const CloudSync = {
     }).eq('id', this.vehicleId);
   },
 
-  // ---- Delete Trip from Cloud ----
-  async deleteTrip(tripId) {
-    if (!this.initialized || !this.user) return;
-    // Find by start_time since local IDs differ from cloud UUIDs
-    // We use the local trip's startTime to match
-  },
-
   // ---- Sync from Cloud ----
   async syncFromCloud() {
     if (!this.initialized || !this.user) return;
 
-    // Fetch trips
-    const { data: cloudTrips } = await supabase
-      .from('trips')
-      .select('*')
+    const { data: cloudTrips } = await sbClient
+      .from('trips').select('*')
       .eq('user_id', this.user.id)
       .order('start_time', { ascending: false });
 
@@ -230,10 +220,8 @@ const CloudSync = {
       GasKo.saveTrips(localTrips);
     }
 
-    // Fetch fuel logs
-    const { data: cloudLogs } = await supabase
-      .from('fuel_logs')
-      .select('*')
+    const { data: cloudLogs } = await sbClient
+      .from('fuel_logs').select('*')
       .eq('user_id', this.user.id)
       .order('created_at', { ascending: false });
 
@@ -250,7 +238,6 @@ const CloudSync = {
       GasKo.saveFuelLogs(localLogs);
     }
 
-    // Refresh UI
     App.loadSettings();
     App.renderTrips();
     App.renderCalibrationLog();
@@ -262,20 +249,13 @@ const CloudSync = {
     if (!this.initialized || !this.user) return;
     const trips = GasKo.getTrips();
     const logs = GasKo.getFuelLogs();
-
-    for (const trip of trips) {
-      await this.saveTrip(trip);
-    }
-    for (const log of logs) {
-      await this.saveFuelLog(log);
-    }
+    for (const trip of trips) await this.saveTrip(trip);
+    for (const log of logs) await this.saveFuelLog(log);
     App.toast(`Uploaded ${trips.length} trips and ${logs.length} logs to cloud`, 'success');
   },
 
   // ---- Update Auth UI ----
   updateAuthUI() {
-    const authPage = document.getElementById('page-auth');
-    const authStatus = document.getElementById('auth-status');
     const loginForm = document.getElementById('auth-login-form');
     const loggedInView = document.getElementById('auth-logged-in');
     const userEmail = document.getElementById('auth-user-email');
