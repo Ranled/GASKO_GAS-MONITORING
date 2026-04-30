@@ -70,9 +70,21 @@
         </svg>
         <span>Settings</span>
       </button>
+      <button class="nav-item" data-page="auth" id="nav-auth">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+          <polyline points="10 17 15 12 10 7"/>
+          <line x1="15" y1="12" x2="3" y2="12"/>
+        </svg>
+        <span>Sign In</span>
+      </button>
     </div>
 
     <div class="sidebar-footer">
+      <div id="sync-badge" class="sync-badge hidden">
+        <div class="sync-dot"></div>
+        <span>Cloud Synced</span>
+      </div>
       <button id="btn-export-csv" class="nav-item export-btn">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -347,14 +359,36 @@
               <label for="cal-fuel-added">Fuel Added (Liters)</label>
               <input type="number" id="cal-fuel-added" step="0.01" min="0" placeholder="e.g. 25.5" required>
             </div>
+
+            <div class="form-divider">
+              <span class="divider-label">Odometer-Based Distance</span>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="cal-odo-prev">Previous Odometer (km)</label>
+                <input type="number" id="cal-odo-prev" step="0.1" min="0" placeholder="e.g. 44910">
+              </div>
+              <div class="form-group">
+                <label for="cal-odo-now">Current Odometer (km)</label>
+                <input type="number" id="cal-odo-now" step="0.1" min="0" placeholder="e.g. 45230">
+              </div>
+            </div>
+
+            <div id="cal-odo-result" class="cal-odo-result hidden">
+              <span class="odo-result-label">Distance Traveled:</span>
+              <span class="odo-result-value" id="cal-odo-distance">0 km</span>
+            </div>
+
+            <div class="form-divider">
+              <span class="divider-label">Or Enter Distance Manually</span>
+            </div>
+
             <div class="form-group">
               <label for="cal-distance">Distance Since Last Fill (km)</label>
-              <input type="number" id="cal-distance" step="0.01" min="0" placeholder="e.g. 320" required>
+              <input type="number" id="cal-distance" step="0.01" min="0" placeholder="Auto-filled from odometer, or enter manually">
             </div>
-            <div class="form-group">
-              <label for="cal-odometer">Odometer Reading (optional)</label>
-              <input type="number" id="cal-odometer" step="0.01" min="0" placeholder="e.g. 45230">
-            </div>
+
             <div class="form-group">
               <label for="cal-notes">Notes (optional)</label>
               <textarea id="cal-notes" rows="2" placeholder="e.g. City driving, highway, mixed"></textarea>
@@ -489,13 +523,95 @@
       </div>
     </section>
 
+    <!-- ========================================== -->
+    <!-- PAGE: AUTH / ACCOUNT                       -->
+    <!-- ========================================== -->
+    <section id="page-auth" class="page">
+      <div class="page-header">
+        <h1>Account</h1>
+        <p class="page-desc">Sign in to sync your data across devices.</p>
+      </div>
+
+      <div class="auth-layout">
+        <!-- Login/Signup Form -->
+        <div id="auth-login-form" class="auth-card glass-card">
+          <div class="auth-tabs">
+            <button class="auth-tab active" id="tab-login" data-tab="login">Sign In</button>
+            <button class="auth-tab" id="tab-signup" data-tab="signup">Sign Up</button>
+          </div>
+
+          <form id="form-login" class="form auth-form">
+            <div class="form-group">
+              <label for="login-email">Email</label>
+              <input type="email" id="login-email" placeholder="you@example.com" required>
+            </div>
+            <div class="form-group">
+              <label for="login-password">Password</label>
+              <input type="password" id="login-password" placeholder="Your password" minlength="6" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-full">Sign In</button>
+          </form>
+
+          <form id="form-signup" class="form auth-form" style="display:none">
+            <div class="form-group">
+              <label for="signup-email">Email</label>
+              <input type="email" id="signup-email" placeholder="you@example.com" required>
+            </div>
+            <div class="form-group">
+              <label for="signup-password">Password</label>
+              <input type="password" id="signup-password" placeholder="Min 6 characters" minlength="6" required>
+            </div>
+            <div class="form-group">
+              <label for="signup-password2">Confirm Password</label>
+              <input type="password" id="signup-password2" placeholder="Confirm password" minlength="6" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-full">Create Account</button>
+          </form>
+        </div>
+
+        <!-- Logged In View -->
+        <div id="auth-logged-in" class="auth-card glass-card" style="display:none">
+          <div class="auth-user-info">
+            <div class="auth-avatar">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+            </div>
+            <div>
+              <p class="auth-email" id="auth-user-email">user@email.com</p>
+              <p class="auth-status-text">✅ Data synced to cloud</p>
+            </div>
+          </div>
+          <div class="auth-actions">
+            <button id="btn-upload-local" class="btn btn-outline btn-full">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+              Upload Local Data to Cloud
+            </button>
+            <button id="btn-sync-now" class="btn btn-outline btn-full">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/><polyline points="21 3 21 12 12 12"/></svg>
+              Sync from Cloud
+            </button>
+            <button id="btn-signout" class="btn btn-danger-outline btn-full">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
   </main>
 
   <!-- Toast Notification Container -->
   <div id="toast-container" class="toast-container"></div>
 
+  <!-- Supabase CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
   <!-- App Scripts -->
   <script src="engine.js"></script>
+  <script src="supabase.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

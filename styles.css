@@ -337,6 +337,24 @@ a { color: var(--primary); text-decoration: none; }
 .form-group select option { background: var(--surface); }
 .form-group textarea { resize: vertical; }
 
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.form-divider {
+  display: flex; align-items: center; gap: 0.75rem; margin: 0.25rem 0;
+}
+.form-divider::before, .form-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+.divider-label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+
+.cal-odo-result {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--cyan-dim); border: 1px solid rgba(34,211,238,0.2);
+  border-radius: var(--radius-sm); padding: 0.65rem 1rem;
+}
+.cal-odo-result.hidden { display: none; }
+.odo-result-label { font-size: 0.8rem; color: var(--text-muted); }
+.odo-result-value { font-size: 1.1rem; font-weight: 700; font-family: var(--mono); color: var(--cyan); }
+
 .cal-preview {
   background: var(--accent-dim); border: 1px solid rgba(74,222,128,0.2);
   border-radius: var(--radius-sm); padding: 1rem; text-align: center;
@@ -372,6 +390,31 @@ a { color: var(--primary); text-decoration: none; }
 .future-features h3 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text); }
 .future-features ul { padding-left: 1.25rem; }
 .future-features li { margin-bottom: 0.35rem; }
+
+/* ===== AUTH / ACCOUNT ===== */
+.auth-layout { display: flex; justify-content: center; padding-top: 1rem; }
+.auth-card { width: 100%; max-width: 400px; padding: 2rem; }
+.auth-tabs { display: flex; margin-bottom: 1.5rem; background: var(--surface2); border-radius: var(--radius-sm); padding: 0.25rem; }
+.auth-tab {
+  flex: 1; padding: 0.5rem; text-align: center; background: transparent;
+  border: none; color: var(--text-muted); font-weight: 500; font-size: 0.9rem;
+  cursor: pointer; border-radius: var(--radius-sm); transition: all 0.2s;
+}
+.auth-tab.active { background: var(--primary); color: #fff; }
+.auth-user-info { display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem; }
+.auth-avatar {
+  width: 64px; height: 64px; border-radius: 50%; background: var(--primary-dim);
+  color: var(--primary); display: flex; align-items: center; justify-content: center;
+}
+.auth-email { font-weight: 600; font-size: 1.1rem; }
+.auth-status-text { color: var(--success); font-size: 0.8rem; margin-top: 0.25rem; }
+.auth-actions { display: flex; flex-direction: column; gap: 0.75rem; }
+.sync-badge {
+  display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem;
+  color: var(--text-muted); justify-content: center; margin-bottom: 0.75rem;
+}
+.sync-badge.hidden { display: none; }
+.sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
 
 /* ===== TOAST ===== */
 .toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 500; display: flex; flex-direction: column; gap: 0.5rem; }

@@ -10,6 +10,7 @@ const App = {
     this.bindControls();
     this.bindSettings();
     this.bindCalibration();
+    this.bindAuth();
     this.bindDataMgmt();
     this.initMap();
     this.loadSettings();
@@ -17,6 +18,8 @@ const App = {
     this.renderCalibrationLog();
     this.initCharts();
     this.updateChartsData();
+    // Init Supabase (offline-safe: falls back to localStorage)
+    CloudSync.init();
   },
 
   // ---- Toast ----
@@ -116,6 +119,10 @@ const App = {
     this.toast(`Trip saved! ${trip.distance.toFixed(2)} km | ₱${trip.cost.toFixed(2)}`, 'success');
     this.updateChartsData();
     this.updateDashboard();
+    // Cloud sync (offline-safe: saves locally first, syncs when online)
+    if (CloudSync.isLoggedIn() && navigator.onLine) {
+      CloudSync.saveTrip(trip).catch(() => {});
+    }
   },
 
   toggleSimulation() {
@@ -331,9 +338,37 @@ const App = {
   bindCalibration() {
     const fuelInput = document.getElementById('cal-fuel-added');
     const distInput = document.getElementById('cal-distance');
+    const odoPrev = document.getElementById('cal-odo-prev');
+    const odoNow = document.getElementById('cal-odo-now');
+    const odoResult = document.getElementById('cal-odo-result');
+    const odoDistance = document.getElementById('cal-odo-distance');
     const preview = document.getElementById('cal-preview');
     const previewVal = document.getElementById('cal-computed-efficiency');
     const previewChange = document.getElementById('cal-change-indicator');
+
+    // Auto-fill previous odometer from last fuel log
+    const logs = GasKo.getFuelLogs();
+    if (logs.length > 0 && logs[0].odometer) {
+      odoPrev.value = logs[0].odometer;
+      odoPrev.placeholder = `Last: ${logs[0].odometer}`;
+    }
+
+    // Odometer → distance calculation
+    const updateOdoDistance = () => {
+      const prev = parseFloat(odoPrev.value);
+      const now = parseFloat(odoNow.value);
+      if (prev > 0 && now > 0 && now > prev) {
+        const dist = now - prev;
+        odoResult.classList.remove('hidden');
+        odoDistance.textContent = dist.toFixed(1) + ' km';
+        distInput.value = dist.toFixed(1); // auto-fill distance field
+        updatePreview();
+      } else {
+        odoResult.classList.add('hidden');
+      }
+    };
+    odoPrev?.addEventListener('input', updateOdoDistance);
+    odoNow?.addEventListener('input', updateOdoDistance);
 
     const updatePreview = () => {
       const fuel = parseFloat(fuelInput.value);
@@ -355,15 +390,27 @@ const App = {
       e.preventDefault();
       const fuel = parseFloat(fuelInput.value);
       const dist = parseFloat(distInput.value);
-      const odo = parseFloat(document.getElementById('cal-odometer').value) || 0;
+      const odoNowVal = parseFloat(odoNow.value) || 0;
       const notes = document.getElementById('cal-notes').value;
-      if (!fuel || !dist) { this.toast('Enter fuel and distance', 'error'); return; }
+      if (!fuel || !dist) { this.toast('Enter fuel and distance (or use odometer)', 'error'); return; }
 
-      const newEff = GasKo.addFuelLog(fuel, dist, odo, notes);
+      const newEff = GasKo.addFuelLog(fuel, dist, odoNowVal, notes);
       this.toast(`Efficiency updated to ${GasKo.getSettings().efficiency.toFixed(1)} km/L`, 'success');
       document.getElementById('current-efficiency-display').textContent = GasKo.getSettings().efficiency.toFixed(1) + ' km/L';
+      
+      // After submit, set previous odometer for next time
+      if (odoNowVal > 0) {
+        odoPrev.value = odoNowVal;
+      }
+      
       e.target.reset();
+      // Restore previous odo after reset
+      if (odoNowVal > 0) {
+        odoPrev.value = odoNowVal;
+        odoPrev.placeholder = `Last: ${odoNowVal}`;
+      }
       preview.classList.add('hidden');
+      odoResult.classList.add('hidden');
       this.renderCalibrationLog();
       this.updateCalChart();
     });
@@ -402,6 +449,10 @@ const App = {
       s.tankCapacity = parseFloat(document.getElementById('set-tank-capacity').value) || s.tankCapacity;
       GasKo.saveSettings(s);
       this.toast('Settings saved!', 'success');
+      // Sync to cloud
+      if (CloudSync.isLoggedIn() && navigator.onLine) {
+        CloudSync.updateVehicle(s).catch(() => {});
+      }
     });
   },
 
@@ -428,6 +479,56 @@ const App = {
         localStorage.removeItem('gasko_settings');
         location.reload();
       }
+    });
+  },
+  // ---- Auth ----
+  bindAuth() {
+    // Tab switching
+    document.getElementById('tab-login')?.addEventListener('click', () => {
+      document.getElementById('tab-login').classList.add('active');
+      document.getElementById('tab-signup').classList.remove('active');
+      document.getElementById('form-login').style.display = 'block';
+      document.getElementById('form-signup').style.display = 'none';
+    });
+    document.getElementById('tab-signup')?.addEventListener('click', () => {
+      document.getElementById('tab-signup').classList.add('active');
+      document.getElementById('tab-login').classList.remove('active');
+      document.getElementById('form-signup').style.display = 'block';
+      document.getElementById('form-login').style.display = 'none';
+    });
+
+    // Login
+    document.getElementById('form-login')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const email = document.getElementById('login-email').value;
+      const pw = document.getElementById('login-password').value;
+      await CloudSync.signIn(email, pw);
+    });
+
+    // Signup
+    document.getElementById('form-signup')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      const email = document.getElementById('signup-email').value;
+      const pw = document.getElementById('signup-password').value;
+      const pw2 = document.getElementById('signup-password2').value;
+      if (pw !== pw2) { this.toast('Passwords do not match', 'error'); return; }
+      await CloudSync.signUp(email, pw);
+    });
+
+    // Sign out
+    document.getElementById('btn-signout')?.addEventListener('click', () => CloudSync.signOut());
+
+    // Upload local data
+    document.getElementById('btn-upload-local')?.addEventListener('click', async () => {
+      if (!navigator.onLine) { this.toast('You are offline', 'error'); return; }
+      await CloudSync.uploadLocalData();
+    });
+
+    // Sync from cloud
+    document.getElementById('btn-sync-now')?.addEventListener('click', async () => {
+      if (!navigator.onLine) { this.toast('You are offline', 'error'); return; }
+      await CloudSync.syncFromCloud();
+      this.toast('Synced from cloud!', 'success');
     });
   }
 };
