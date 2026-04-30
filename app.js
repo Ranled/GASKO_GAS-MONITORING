@@ -728,21 +728,27 @@ const App = {
     document.getElementById('tab-login')?.addEventListener('click', showLogin);
     document.getElementById('tab-signup')?.addEventListener('click', showSignup);
 
-    // Sign In — use button click, not form submit (avoids hidden required field issue)
+    // Sign In
+    let signingIn = false;
     document.getElementById('form-login')?.addEventListener('submit', async e => {
       e.preventDefault();
+      if (signingIn) return;  // prevent double-submit
       const email = document.getElementById('login-email').value.trim();
       const pw = document.getElementById('login-password').value;
       if (!email || !pw) { this.toast('Enter email and password', 'error'); return; }
       const btn = e.submitter || e.target.querySelector('button[type=submit]');
-      if (btn) btn.textContent = 'Signing in...';
+      signingIn = true;
+      if (btn) { btn.disabled = true; btn.textContent = 'Signing in...'; }
       await CloudSync.signIn(email, pw);
-      if (btn) btn.textContent = 'Sign In';
+      signingIn = false;
+      if (btn) { btn.disabled = false; btn.textContent = 'Sign In'; }
     });
 
-    // Sign Up — use button click with manual validation
+    // Sign Up
+    let signingUp = false;
     document.getElementById('form-signup')?.addEventListener('submit', async e => {
       e.preventDefault();
+      if (signingUp) return;  // prevent double-submit
       const email = document.getElementById('signup-email').value.trim();
       const pw = document.getElementById('signup-password').value;
       const pw2 = document.getElementById('signup-password2').value;
@@ -750,9 +756,11 @@ const App = {
       if (pw !== pw2) { this.toast('Passwords do not match', 'error'); return; }
       if (pw.length < 6) { this.toast('Password must be at least 6 characters', 'error'); return; }
       const btn = e.submitter || e.target.querySelector('button[type=submit]');
-      if (btn) btn.textContent = 'Creating...';
+      signingUp = true;
+      if (btn) { btn.disabled = true; btn.textContent = 'Creating account...'; }
       await CloudSync.signUp(email, pw);
-      if (btn) btn.textContent = 'Create Account';
+      signingUp = false;
+      if (btn) { btn.disabled = false; btn.textContent = 'Create Account'; }
     });
 
     // Sign out
