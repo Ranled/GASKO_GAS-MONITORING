@@ -406,6 +406,14 @@ a { color: var(--primary); text-decoration: none; }
   cursor: pointer; border-radius: var(--radius-sm); transition: all 0.2s;
 }
 .auth-tab.active { background: var(--primary); color: #fff; }
+.password-field { position: relative; display: flex; align-items: center; }
+.password-field input { flex: 1; padding-right: 2.5rem; }
+.pw-toggle {
+  position: absolute; right: 0.6rem; background: none; border: none;
+  color: var(--text-muted); cursor: pointer; padding: 0.25rem;
+  display: flex; align-items: center; transition: color 0.2s;
+}
+.pw-toggle:hover { color: var(--primary); }
 .auth-user-info { display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem; }
 .auth-avatar {
   width: 64px; height: 64px; border-radius: 50%; background: var(--primary-dim);

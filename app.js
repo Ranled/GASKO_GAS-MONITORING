@@ -674,3 +674,13 @@ const App = {
 
 // ---- Boot ----
 document.addEventListener('DOMContentLoaded', () => App.init());
+
+// ---- Show/Hide Password Toggle ----
+function togglePw(inputId, btn) {
+  const input = document.getElementById(inputId);
+  const isHidden = input.type === 'password';
+  input.type = isHidden ? 'text' : 'password';
+  btn.querySelector('.eye-icon').style.display     = isHidden ? 'none'  : '';
+  btn.querySelector('.eye-off-icon').style.display = isHidden ? ''      : 'none';
+  btn.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+}
