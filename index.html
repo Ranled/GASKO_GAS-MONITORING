@@ -25,6 +25,46 @@
 </head>
 <body>
 
+  <!-- ===== MAINTENANCE MODE OVERLAY ===== -->
+  <!-- Set display:none to disable, or flex to enable -->
+  <div id="maintenance-overlay" style="
+    display: flex;
+    position: fixed; inset: 0; z-index: 99999;
+    background: linear-gradient(135deg, #0a0a1a 0%, #1a0a2e 50%, #0a0a1a 100%);
+    flex-direction: column; align-items: center; justify-content: center;
+    font-family: 'Inter', sans-serif; text-align: center; padding: 2rem;
+  ">
+    <div style="
+      background: rgba(168,85,247,0.08); border: 1px solid rgba(168,85,247,0.25);
+      border-radius: 20px; padding: 3rem 2.5rem; max-width: 480px; width: 100%;
+      backdrop-filter: blur(20px);
+    ">
+      <div style="font-size: 4rem; margin-bottom: 1rem; animation: spin 3s ease-in-out infinite;">🔧</div>
+      <h1 style="
+        font-size: 1.8rem; font-weight: 800; margin: 0 0 0.5rem;
+        background: linear-gradient(135deg, #a855f7, #6366f1);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        letter-spacing: 0.15em;
+      ">MAINTENANCE</h1>
+      <p style="color: #94a3b8; font-size: 1rem; line-height: 1.7; margin: 1rem 0;">
+        We're currently performing some updates to improve your experience.
+        <br><br>
+        <strong style="color: #c4b5fd;">Please kindly wait — thank you for your understanding!</strong>
+      </p>
+      <div style="
+        margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(168,85,247,0.15);
+        color: #64748b; font-size: 0.82rem;
+      ">
+        <span style="color: #a855f7;">⚙️</span> Dev <strong style="color: #e2e8f0;">Raian</strong> is currently debugging.
+        <br>The app will be back shortly!
+      </div>
+    </div>
+    <p style="color: #475569; font-size: 0.75rem; margin-top: 2rem;">GasKo v<span id="maint-version">1.0</span></p>
+  </div>
+  <style>
+    @keyframes spin { 0%,100%{transform:rotate(0deg)} 25%{transform:rotate(-20deg)} 75%{transform:rotate(20deg)} }
+  </style>
+
   <!-- ===== TRACKING STATUS BAR (shown during active trip) ===== -->
   <div id="tracking-bar" class="tracking-bar hidden">
     <div class="tracking-bar-dot"></div>
