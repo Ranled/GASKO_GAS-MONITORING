@@ -210,9 +210,11 @@ const GasKo = {
   exportCSV() {
     const trips = this.getTrips();
     if (!trips.length) { App.toast('No data to export', 'info'); return; }
-    let csv = 'Trip ID,Date,Distance (km),Fuel Used (L),Cost (PHP),Avg Speed (km/h),Max Speed (km/h),Efficiency Used (km/L),Driving Score,Duration (min)\n';
+    // Include both human-readable date AND raw timestamp for reliable re-import
+    let csv = 'Trip ID,Date,Timestamp,Distance (km),Fuel Used (L),Cost (PHP),Avg Speed (km/h),Max Speed (km/h),Efficiency Used (km/L),Driving Score,Duration (min)\n';
     trips.forEach(t => {
-      csv += `${t.id},${new Date(t.startTime).toLocaleString()},${t.distance.toFixed(2)},${t.fuelUsed.toFixed(2)},${t.cost.toFixed(2)},${(t.avgSpeed||0).toFixed(1)},${(t.maxSpeed||0).toFixed(1)},${(t.efficiencyUsed||0).toFixed(1)},${(t.drivingScore||0).toFixed(0)},${((t.duration||0)/60000).toFixed(1)}\n`;
+      const date = new Date(t.startTime);
+      csv += `${t.id},"${date.toLocaleString()}",${t.startTime},${t.distance.toFixed(2)},${t.fuelUsed.toFixed(2)},${t.cost.toFixed(2)},${(t.avgSpeed||0).toFixed(1)},${(t.maxSpeed||0).toFixed(1)},${(t.efficiencyUsed||0).toFixed(1)},${(t.drivingScore||0).toFixed(0)},${((t.duration||0)/60000).toFixed(1)}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
@@ -234,6 +236,23 @@ const GasKo = {
       return 0;
     }
 
+    // Detect new format (has Timestamp column) vs old format
+    const hasTimestamp = header.includes('timestamp');
+    const cols = header.split(',');
+    const idxId = cols.findIndex(c => c.includes('trip id'));
+    const idxTimestamp = cols.findIndex(c => c.includes('timestamp'));
+    const idxDate = cols.findIndex(c => c === 'date');
+    // Offset: new format has extra Timestamp column, shifting numeric columns by 1
+    const offset = hasTimestamp ? 1 : 0;
+    const idxDist = 2 + offset;
+    const idxFuel = 3 + offset;
+    const idxCost = 4 + offset;
+    const idxAvgSpd = 5 + offset;
+    const idxMaxSpd = 6 + offset;
+    const idxEff = 7 + offset;
+    const idxScore = 8 + offset;
+    const idxDur = 9 + offset;
+
     const existing = this.getTrips();
     const existingIds = new Set(existing.map(t => t.id));
     let imported = 0;
@@ -241,29 +260,45 @@ const GasKo = {
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
-      // Split by comma, handle quoted values
-      const cols = line.match(/(\'[^\']*\'|"[^"]*"|[^,]+)/g) || line.split(',');
-      if (cols.length < 10) continue;
 
-      const id = cols[0].trim().replace(/[\'"]/g, '');
-      if (existingIds.has(id)) continue; // skip duplicates
+      // Parse CSV respecting quoted fields
+      const parsedCols = [];
+      let inQuote = false, cur = '';
+      for (let ch of line + ',') {
+        if (ch === '"') { inQuote = !inQuote; }
+        else if (ch === ',' && !inQuote) { parsedCols.push(cur.trim()); cur = ''; }
+        else { cur += ch; }
+      }
 
-      const dateStr = cols[1].trim().replace(/[\'"]/g, '');
-      const startTime = new Date(dateStr).getTime() || Date.now();
+      if (parsedCols.length < 10) continue;
+
+      const id = parsedCols[idxId];
+      if (!id || existingIds.has(id)) continue;
+
+      // Use raw numeric timestamp if available (accurate), otherwise parse date string
+      let startTime;
+      if (hasTimestamp && parsedCols[idxTimestamp]) {
+        startTime = parseInt(parsedCols[idxTimestamp], 10);
+      } else {
+        startTime = Date.parse(parsedCols[idxDate]) || Date.now();
+      }
+      if (!startTime || isNaN(startTime)) startTime = Date.now();
+
+      const durationMs = (parseFloat(parsedCols[idxDur]) || 0) * 60000;
 
       const trip = {
         id,
         startTime,
-        endTime: startTime + (parseFloat(cols[9]) || 0) * 60000,
-        distance: parseFloat(cols[2]) || 0,
-        fuelUsed: parseFloat(cols[3]) || 0,
-        cost: parseFloat(cols[4]) || 0,
+        endTime: startTime + durationMs,
+        distance: parseFloat(parsedCols[idxDist]) || 0,
+        fuelUsed: parseFloat(parsedCols[idxFuel]) || 0,
+        cost: parseFloat(parsedCols[idxCost]) || 0,
         fuelPrice: this.getSettings().fuelPrice,
-        avgSpeed: parseFloat(cols[5]) || 0,
-        maxSpeed: parseFloat(cols[6]) || 0,
-        efficiencyUsed: parseFloat(cols[7]) || 0,
-        drivingScore: parseFloat(cols[8]) || 0,
-        duration: (parseFloat(cols[9]) || 0) * 60000,
+        avgSpeed: parseFloat(parsedCols[idxAvgSpd]) || 0,
+        maxSpeed: parseFloat(parsedCols[idxMaxSpd]) || 0,
+        efficiencyUsed: parseFloat(parsedCols[idxEff]) || 0,
+        drivingScore: parseFloat(parsedCols[idxScore]) || 0,
+        duration: durationMs,
         route: [],
         behaviorInsight: 'Imported from CSV'
       };
@@ -272,7 +307,6 @@ const GasKo = {
       imported++;
     }
 
-    // Sort newest first
     existing.sort((a, b) => b.startTime - a.startTime);
     this.saveTrips(existing);
     return imported;
