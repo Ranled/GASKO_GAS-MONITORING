@@ -59,16 +59,13 @@ const CloudSync = {
 
   listenAuthChanges() {
     if (!this.initialized) return;
-    sbClient.auth.onAuthStateChange((event, session) => {
+    sbClient.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
         this.user = session.user;
-        // Update UI immediately — don't wait for DB operations
+        await this.ensureVehicle();
         this.updateAuthUI();
-        App.toast('Signed in! ✓', 'success');
-        // Run DB setup in background — won't block the sign-in
-        this.ensureVehicle()
-          .then(() => this.syncFromCloud())
-          .catch(e => console.error('GasKo: post-signin sync error:', e));
+        this.syncFromCloud();
+        App.toast('Signed in! Data syncing...', 'success');
       } else if (event === 'SIGNED_OUT') {
         this.user = null;
         this.vehicleId = null;
@@ -78,7 +75,7 @@ const CloudSync = {
     });
   },
 
-  // ---- Sign Up ----
+
   async signUp(email, password) {
     console.log('GasKo: signUp called', email);
     if (!this.initialized) {
@@ -103,23 +100,17 @@ const CloudSync = {
     console.log('GasKo: signIn called', email);
     if (!this.initialized) {
       App.toast('Cloud sync unavailable — check connection', 'error');
+      console.error('GasKo: signIn failed — not initialized');
       return;
     }
-    // Race the sign-in against a 12-second timeout so it never hangs silently
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Sign in timed out — check your internet connection')), 12000)
-    );
     try {
-      const { data, error } = await Promise.race([
-        sbClient.auth.signInWithPassword({ email, password }),
-        timeoutPromise
-      ]);
+      const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
       console.log('GasKo: signIn result', { data, error });
       if (error) { App.toast(error.message, 'error'); return null; }
       return data;
     } catch (e) {
       console.error('GasKo: signIn exception:', e);
-      App.toast(e.message, 'error');
+      App.toast('Sign in failed: ' + e.message, 'error');
     }
   },
 

@@ -390,6 +390,11 @@ a { color: var(--primary); text-decoration: none; }
 .future-features h3 { font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text); }
 .future-features ul { padding-left: 1.25rem; }
 .future-features li { margin-bottom: 0.35rem; }
+.about-developer {
+  margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);
+  font-size: 0.82rem; color: var(--text-muted);
+}
+.about-developer strong { color: var(--primary); }
 
 /* ===== AUTH / ACCOUNT ===== */
 .auth-layout { display: flex; justify-content: center; padding-top: 1rem; }
