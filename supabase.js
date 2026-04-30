@@ -35,9 +35,10 @@ const CloudSync = {
       });
       this.initialized = true;
       console.log('GasKo: Supabase initialized successfully.');
-      // Warm up the Supabase connection immediately so sign-in is fast
-      // This pre-establishes the TCP connection before user clicks Sign In
-      fetch(`${SUPABASE_URL}/auth/v1/health`, { method: 'GET' }).catch(() => {});
+      // Warm up connection so sign-in responds faster (avoids cold start delay)
+      fetch(`${SUPABASE_URL}/auth/v1/settings`, {
+        headers: { 'apikey': SUPABASE_ANON_KEY }
+      }).catch(() => {});
       this.checkSession();
       this.listenAuthChanges();
     } catch (e) {

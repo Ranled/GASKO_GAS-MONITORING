@@ -498,7 +498,25 @@ a { color: var(--primary); text-decoration: none; }
   50% { opacity: 0.6; r: 14; }
 }
 
-/* ===== TOAST ===== */
+/* ===== AUTH LOADING BAR ===== */
+.auth-loading {
+  margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.4rem;
+  align-items: center;
+}
+.auth-loading.hidden { display: none; }
+.auth-loading-bar {
+  width: 100%; height: 3px; background: var(--surface2);
+  border-radius: 99px; overflow: hidden; position: relative;
+}
+.auth-loading-bar::after {
+  content: ''; position: absolute; left: -40%; width: 40%; height: 100%;
+  background: linear-gradient(90deg, transparent, var(--primary), transparent);
+  animation: authSweep 1.2s ease-in-out infinite;
+}
+@keyframes authSweep { to { left: 140%; } }
+#signin-loading-msg { font-size: 0.75rem; color: var(--text-muted); }
+
+
 .toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 500; display: flex; flex-direction: column; gap: 0.5rem; }
 .toast {
   background: var(--surface2); border: 1px solid var(--border);

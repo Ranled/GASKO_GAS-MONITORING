@@ -612,7 +612,11 @@
                 </button>
               </div>
             </div>
-            <button type="submit" class="btn btn-primary btn-full">Sign In</button>
+            <button type="submit" class="btn btn-primary btn-full" id="btn-signin-submit">Sign In</button>
+            <div id="signin-loading" class="auth-loading hidden">
+              <div class="auth-loading-bar"></div>
+              <span id="signin-loading-msg">Connecting to server...</span>
+            </div>
           </form>
 
           <form id="form-signup" class="form auth-form" style="display:none">

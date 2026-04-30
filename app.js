@@ -732,16 +732,26 @@ const App = {
     let signingIn = false;
     document.getElementById('form-login')?.addEventListener('submit', async e => {
       e.preventDefault();
-      if (signingIn) return;  // prevent double-submit
+      if (signingIn) return;
       const email = document.getElementById('login-email').value.trim();
       const pw = document.getElementById('login-password').value;
       if (!email || !pw) { this.toast('Enter email and password', 'error'); return; }
-      const btn = e.submitter || e.target.querySelector('button[type=submit]');
+      const btn = document.getElementById('btn-signin-submit');
+      const loading = document.getElementById('signin-loading');
+      const loadingMsg = document.getElementById('signin-loading-msg');
       signingIn = true;
       if (btn) { btn.disabled = true; btn.textContent = 'Signing in...'; }
+      if (loading) loading.classList.remove('hidden');
+      // Update message after a short delay to show progress
+      const msgTimer = setTimeout(() => {
+        if (loadingMsg) loadingMsg.textContent = 'Verifying credentials...';
+      }, 2000);
       await CloudSync.signIn(email, pw);
+      clearTimeout(msgTimer);
       signingIn = false;
       if (btn) { btn.disabled = false; btn.textContent = 'Sign In'; }
+      if (loading) loading.classList.add('hidden');
+      if (loadingMsg) loadingMsg.textContent = 'Connecting to server...';
     });
 
     // Sign Up
