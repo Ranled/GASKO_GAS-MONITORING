@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GasKo — Real-Time Fuel Monitoring</title>
+  <meta name="description" content="GasKo: GPS-based vehicle fuel consumption monitoring with self-calibrating efficiency, real-time tracking, and driving behavior analysis.">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- App Styles -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ============================================ -->
+  <!-- SIDEBAR NAVIGATION                           -->
+  <!-- ============================================ -->
+  <nav id="sidebar" class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 22V7l9-5 9 5v15"/>
+          <path d="M9 22V12h6v10"/>
+          <circle cx="12" cy="8" r="1"/>
+        </svg>
+      </div>
+      <span class="brand-text">Gas<span class="brand-accent">Ko</span></span>
+    </div>
+
+    <div class="sidebar-nav">
+      <button class="nav-item active" data-page="dashboard" id="nav-dashboard">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1"/>
+          <rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/>
+          <rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
+        <span>Dashboard</span>
+      </button>
+      <button class="nav-item" data-page="trips" id="nav-trips">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/>
+          <circle cx="12" cy="10" r="3"/>
+        </svg>
+        <span>Trips</span>
+      </button>
+      <button class="nav-item" data-page="calibrate" id="nav-calibrate">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+        </svg>
+        <span>Calibrate</span>
+      </button>
+      <button class="nav-item" data-page="settings" id="nav-settings">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+        </svg>
+        <span>Settings</span>
+      </button>
+    </div>
+
+    <div class="sidebar-footer">
+      <button id="btn-export-csv" class="nav-item export-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        <span>Export CSV</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Mobile Header -->
+  <header id="mobile-header" class="mobile-header">
+    <button id="btn-menu" class="menu-btn">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="12" x2="21" y2="12"/>
+        <line x1="3" y1="6" x2="21" y2="6"/>
+        <line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+    </button>
+    <span class="mobile-brand">Gas<span class="brand-accent">Ko</span></span>
+  </header>
+
+  <!-- Overlay for mobile sidebar -->
+  <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+  <!-- ============================================ -->
+  <!-- MAIN CONTENT                                 -->
+  <!-- ============================================ -->
+  <main id="main-content" class="main-content">
+
+    <!-- DISCLAIMER BANNER -->
+    <div id="disclaimer-banner" class="disclaimer-banner">
+      <div class="disclaimer-content">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <p>This system estimates fuel consumption based on GPS data and user-provided efficiency values. Accuracy improves over time with user input.</p>
+      </div>
+      <button id="btn-dismiss-disclaimer" class="disclaimer-close">&times;</button>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- PAGE: DASHBOARD                            -->
+    <!-- ========================================== -->
+    <section id="page-dashboard" class="page active">
+      <div class="page-header">
+        <h1>Dashboard</h1>
+        <div class="trip-timer" id="trip-timer">
+          <div class="timer-dot" id="timer-dot"></div>
+          <span id="timer-display">00:00:00</span>
+        </div>
+      </div>
+
+      <!-- Trip Controls -->
+      <div class="trip-controls">
+        <button id="btn-start-trip" class="btn btn-start">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+          Start Trip
+        </button>
+        <button id="btn-end-trip" class="btn btn-end" disabled>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="6" y="6" width="12" height="12" rx="2"/>
+          </svg>
+          End Trip
+        </button>
+        <button id="btn-simulate" class="btn btn-simulate" title="Simulate GPS movement for demo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+          </svg>
+          Demo Mode
+        </button>
+      </div>
+
+      <!-- Stats Cards Row -->
+      <div class="stats-grid">
+        <div class="stat-card" id="card-speed">
+          <div class="stat-icon speed-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/>
+              <path d="M12 12l4-3"/>
+              <path d="M12 7v1"/>
+            </svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-label">Speed</span>
+            <span class="stat-value" id="stat-speed">0</span>
+            <span class="stat-unit">km/h</span>
+          </div>
+        </div>
+
+        <div class="stat-card" id="card-distance">
+          <div class="stat-icon distance-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6H5a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h13l4-3.5L18 6Z"/>
+              <path d="M12 13v8"/>
+              <path d="M12 21h4"/>
+            </svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-label">Distance</span>
+            <span class="stat-value" id="stat-distance">0.00</span>
+            <span class="stat-unit">km</span>
+          </div>
+        </div>
+
+        <div class="stat-card" id="card-fuel">
+          <div class="stat-icon fuel-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 22V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v17"/>
+              <path d="M13 10h4a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V9.83a2 2 0 0 0-.59-1.42L18 4"/>
+              <path d="M18 7v4"/>
+              <path d="M3 22h10"/>
+            </svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-label">Fuel Used</span>
+            <span class="stat-value" id="stat-fuel">0.00</span>
+            <span class="stat-unit">liters</span>
+          </div>
+        </div>
+
+        <div class="stat-card" id="card-cost">
+          <div class="stat-icon cost-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="1" x2="12" y2="23"/>
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-label">Trip Cost</span>
+            <span class="stat-value" id="stat-cost">₱0.00</span>
+            <span class="stat-unit">PHP</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Speed Gauge + Map Row -->
+      <div class="dashboard-main">
+        <div class="gauge-container glass-card">
+          <h2 class="section-title">Speed Gauge</h2>
+          <div class="gauge-wrapper">
+            <svg id="speed-gauge" viewBox="0 0 200 130" class="speed-gauge-svg">
+              <!-- Background arc -->
+              <path d="M 20 120 A 80 80 0 0 1 180 120" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="14" stroke-linecap="round"/>
+              <!-- Speed arc -->
+              <path id="gauge-arc" d="M 20 120 A 80 80 0 0 1 180 120" fill="none" stroke="url(#gaugeGradient)" stroke-width="14" stroke-linecap="round" stroke-dasharray="251.2" stroke-dashoffset="251.2"/>
+              <!-- Gradient definition -->
+              <defs>
+                <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#4ade80"/>
+                  <stop offset="50%" stop-color="#facc15"/>
+                  <stop offset="100%" stop-color="#f43f5e"/>
+                </linearGradient>
+              </defs>
+              <!-- Speed text -->
+              <text id="gauge-speed-text" x="100" y="95" text-anchor="middle" class="gauge-text">0</text>
+              <text x="100" y="115" text-anchor="middle" class="gauge-unit-text">km/h</text>
+              <!-- Tick labels -->
+              <text x="18" y="135" text-anchor="middle" class="gauge-tick">0</text>
+              <text x="60" y="55" text-anchor="middle" class="gauge-tick">50</text>
+              <text x="100" y="40" text-anchor="middle" class="gauge-tick">100</text>
+              <text x="140" y="55" text-anchor="middle" class="gauge-tick">150</text>
+              <text x="182" y="135" text-anchor="middle" class="gauge-tick">200</text>
+            </svg>
+          </div>
+          <!-- Behavior Insight -->
+          <div id="behavior-insight" class="behavior-insight hidden">
+            <div class="insight-icon">💡</div>
+            <p id="insight-text">Analyzing driving behavior...</p>
+          </div>
+        </div>
+
+        <div class="map-container glass-card">
+          <h2 class="section-title">Live Map</h2>
+          <div id="map" class="map"></div>
+        </div>
+      </div>
+
+      <!-- Charts Row -->
+      <div class="charts-grid">
+        <div class="chart-card glass-card">
+          <h2 class="section-title">Fuel Efficiency Over Time</h2>
+          <canvas id="chart-efficiency"></canvas>
+        </div>
+        <div class="chart-card glass-card">
+          <h2 class="section-title">Cost Per Trip</h2>
+          <canvas id="chart-cost"></canvas>
+        </div>
+        <div class="chart-card glass-card">
+          <h2 class="section-title">Fuel Usage Distribution</h2>
+          <canvas id="chart-fuel-dist"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- PAGE: TRIPS                                -->
+    <!-- ========================================== -->
+    <section id="page-trips" class="page">
+      <div class="page-header">
+        <h1>Trip History</h1>
+        <div class="trip-summary-stats">
+          <div class="summary-chip">
+            <span class="chip-label">Total Trips</span>
+            <span class="chip-value" id="total-trips-count">0</span>
+          </div>
+          <div class="summary-chip">
+            <span class="chip-label">Total Distance</span>
+            <span class="chip-value" id="total-distance-all">0 km</span>
+          </div>
+          <div class="summary-chip">
+            <span class="chip-label">Total Fuel</span>
+            <span class="chip-value" id="total-fuel-all">0 L</span>
+          </div>
+          <div class="summary-chip">
+            <span class="chip-label">Total Cost</span>
+            <span class="chip-value" id="total-cost-all">₱0</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="trips-list" class="trips-list">
+        <div class="empty-state" id="trips-empty">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="empty-icon">
+            <path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/>
+            <circle cx="12" cy="10" r="3"/>
+          </svg>
+          <h3>No trips yet</h3>
+          <p>Start your first trip from the Dashboard to begin tracking fuel consumption.</p>
+        </div>
+      </div>
+
+      <!-- Trip Detail Modal -->
+      <div id="trip-detail-modal" class="modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-content glass-card">
+          <div class="modal-header">
+            <h2 id="modal-trip-title">Trip Details</h2>
+            <button id="btn-close-modal" class="modal-close">&times;</button>
+          </div>
+          <div class="modal-body">
+            <div id="trip-detail-map" class="trip-detail-map"></div>
+            <div id="trip-detail-stats" class="trip-detail-stats"></div>
+            <div id="trip-detail-insights" class="trip-detail-insights"></div>
+          </div>
+          <div class="modal-footer">
+            <button id="btn-delete-trip" class="btn btn-danger">Delete Trip</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- PAGE: CALIBRATE                            -->
+    <!-- ========================================== -->
+    <section id="page-calibrate" class="page">
+      <div class="page-header">
+        <h1>Self-Calibration</h1>
+        <p class="page-desc">Improve fuel estimation accuracy by logging your actual fuel consumption.</p>
+      </div>
+
+      <div class="calibrate-layout">
+        <div class="calibrate-form-card glass-card">
+          <h2 class="section-title">Log Fuel Refill</h2>
+          <form id="calibration-form" class="form">
+            <div class="form-group">
+              <label for="cal-fuel-added">Fuel Added (Liters)</label>
+              <input type="number" id="cal-fuel-added" step="0.01" min="0" placeholder="e.g. 25.5" required>
+            </div>
+            <div class="form-group">
+              <label for="cal-distance">Distance Since Last Fill (km)</label>
+              <input type="number" id="cal-distance" step="0.01" min="0" placeholder="e.g. 320" required>
+            </div>
+            <div class="form-group">
+              <label for="cal-odometer">Odometer Reading (optional)</label>
+              <input type="number" id="cal-odometer" step="0.01" min="0" placeholder="e.g. 45230">
+            </div>
+            <div class="form-group">
+              <label for="cal-notes">Notes (optional)</label>
+              <textarea id="cal-notes" rows="2" placeholder="e.g. City driving, highway, mixed"></textarea>
+            </div>
+
+            <div id="cal-preview" class="cal-preview hidden">
+              <div class="preview-label">Computed Efficiency</div>
+              <div class="preview-value" id="cal-computed-efficiency">-- km/L</div>
+              <div class="preview-change" id="cal-change-indicator"></div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-full">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+              Log &amp; Update Efficiency
+            </button>
+          </form>
+        </div>
+
+        <div class="calibrate-history-card glass-card">
+          <h2 class="section-title">Efficiency History</h2>
+          <div class="current-efficiency">
+            <span class="ce-label">Current Efficiency</span>
+            <span class="ce-value" id="current-efficiency-display">12.0 km/L</span>
+          </div>
+          <canvas id="chart-cal-efficiency"></canvas>
+          <div id="calibration-log" class="calibration-log">
+            <div class="empty-state small" id="cal-empty">
+              <p>No calibration entries yet.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- PAGE: SETTINGS                             -->
+    <!-- ========================================== -->
+    <section id="page-settings" class="page">
+      <div class="page-header">
+        <h1>Settings</h1>
+        <p class="page-desc">Configure your vehicle and fuel preferences.</p>
+      </div>
+
+      <div class="settings-layout">
+        <div class="settings-card glass-card">
+          <h2 class="section-title">Vehicle Configuration</h2>
+          <form id="settings-form" class="form">
+            <div class="form-group">
+              <label for="set-vehicle-name">Vehicle Name</label>
+              <input type="text" id="set-vehicle-name" placeholder="e.g. My Toyota Vios" required>
+            </div>
+            <div class="form-group">
+              <label for="set-fuel-type">Fuel Type</label>
+              <select id="set-fuel-type">
+                <option value="gasoline">Gasoline</option>
+                <option value="diesel">Diesel</option>
+                <option value="premium">Premium Gasoline</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="set-efficiency">Fuel Efficiency (km/L)</label>
+              <input type="number" id="set-efficiency" step="0.1" min="1" max="100" placeholder="e.g. 12" required>
+            </div>
+            <div class="form-group">
+              <label for="set-fuel-price">Fuel Price (₱ per Liter)</label>
+              <input type="number" id="set-fuel-price" step="0.01" min="0" placeholder="e.g. 65.50" required>
+            </div>
+            <div class="form-group">
+              <label for="set-tank-capacity">Tank Capacity (Liters)</label>
+              <input type="number" id="set-tank-capacity" step="0.1" min="1" placeholder="e.g. 42">
+            </div>
+            <button type="submit" class="btn btn-primary btn-full">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                <polyline points="17 21 17 13 7 13 7 21"/>
+                <polyline points="7 3 7 8 15 8"/>
+              </svg>
+              Save Settings
+            </button>
+          </form>
+        </div>
+
+        <div class="settings-card glass-card">
+          <h2 class="section-title">Data Management</h2>
+          <div class="data-actions">
+            <button id="btn-export-all" class="btn btn-outline btn-full">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Export All Data (CSV)
+            </button>
+            <button id="btn-clear-trips" class="btn btn-outline btn-full btn-warn">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              </svg>
+              Clear All Trips
+            </button>
+            <button id="btn-reset-all" class="btn btn-outline btn-full btn-danger-outline">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18"/>
+                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                <line x1="10" y1="11" x2="10" y2="17"/>
+                <line x1="14" y1="11" x2="14" y2="17"/>
+              </svg>
+              Reset Everything
+            </button>
+          </div>
+        </div>
+
+        <div class="settings-card glass-card">
+          <h2 class="section-title">About GasKo</h2>
+          <div class="about-content">
+            <p class="about-version">Version 1.0.0</p>
+            <p>GasKo is a real-time GPS-based vehicle fuel consumption monitoring system that estimates fuel usage and improves accuracy over time through user input (self-calibration).</p>
+            <div class="future-features">
+              <h3>🚀 Future Features</h3>
+              <ul>
+                <li>OBD-II integration for real fuel data</li>
+                <li>AI-based fuel prediction</li>
+                <li>Route optimization</li>
+                <li>Fuel expense analytics</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- App Scripts -->
+  <script src="engine.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
