@@ -30,7 +30,7 @@ const CloudSync = {
           flowType: 'implicit',
           autoRefreshToken: true,
           detectSessionInUrl: false,
-          lock: (_name, _timeout, fn) => fn()
+          lock: async (_name, _acquireTimeout, fn) => await fn()
         }
       });
       this.initialized = true;
@@ -125,17 +125,22 @@ const CloudSync = {
     console.log('GasKo: signIn called', email);
     if (!this.initialized) {
       App.toast('Cloud sync unavailable — check connection', 'error');
-      console.error('GasKo: signIn failed — not initialized');
       return;
     }
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Sign in timed out — please try again')), 10000)
+    );
     try {
-      const { data, error } = await sbClient.auth.signInWithPassword({ email, password });
+      const { data, error } = await Promise.race([
+        sbClient.auth.signInWithPassword({ email, password }),
+        timeout
+      ]);
       console.log('GasKo: signIn result', { data, error });
       if (error) { App.toast(error.message, 'error'); return null; }
       return data;
     } catch (e) {
       console.error('GasKo: signIn exception:', e);
-      App.toast('Sign in failed: ' + e.message, 'error');
+      App.toast(e.message, 'error');
     }
   },
 
