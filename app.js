@@ -3,6 +3,8 @@
 const App = {
   map: null, marker: null, routeLine: null, detailMap: null,
   charts: {}, currentPage: 'dashboard',
+  _wakeLock: null, _trackingNotif: null, _notifTick: 0,
+  _visibilityHandler: null, _unloadHandler: null, _wasPaused: false,
 
   // ---- Init ----
   init() {
@@ -107,6 +109,7 @@ const App = {
     document.getElementById('timer-dot').classList.add('active');
     document.querySelectorAll('.stat-card').forEach(c => c.classList.add('glow'));
     this.startTimer();
+    this.startAmbient();
     this.toast('Trip started! GPS tracking active.', 'success');
   },
 
@@ -119,6 +122,7 @@ const App = {
     document.getElementById('timer-dot').classList.remove('active');
     document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('glow'));
     this.stopTimer();
+    this.stopAmbient();
     this.toast(`Trip saved! ${trip.distance.toFixed(2)} km | ₱${trip.cost.toFixed(2)}`, 'success');
     this.updateChartsData();
     this.updateDashboard();
@@ -143,7 +147,6 @@ const App = {
     }
   },
 
-  // ---- Timer ----
   startTimer() {
     this.stopTimer();
     GasKo.state.timerInterval = setInterval(() => {
@@ -155,9 +158,104 @@ const App = {
       document.getElementById('timer-display').textContent =
         `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
       this.updateDashboard();
+      // Update tracking notification every 15s
+      this._notifTick++;
+      if (this._notifTick % 15 === 0) this._updateTrackingNotif();
     }, 1000);
   },
   stopTimer() { clearInterval(GasKo.state.timerInterval); },
+
+  // ---- Ambient: Wake Lock + Notification + Visibility ----
+  async startAmbient() {
+    // 1. Screen Wake Lock — prevents screen from sleeping during trip
+    if ('wakeLock' in navigator) {
+      try {
+        this._wakeLock = await navigator.wakeLock.request('screen');
+        console.log('GasKo: Wake Lock acquired ✓');
+        this._wakeLock.addEventListener('release', () => {
+          // Re-acquire if trip still active (e.g. user plugged in charger)
+          if (GasKo.state.tracking) this.startAmbient();
+        });
+      } catch(e) { console.warn('GasKo: Wake Lock unavailable:', e.message); }
+    }
+
+    // 2. Persistent notification in notification bar
+    if ('Notification' in window) {
+      if (Notification.permission === 'default') {
+        await Notification.requestPermission();
+      }
+      this._updateTrackingNotif();
+    }
+
+    // 3. Tracking status bar
+    const bar = document.getElementById('tracking-bar');
+    if (bar) bar.classList.remove('hidden');
+
+    // 4. Detect background / foreground switch
+    this._wasPaused = false;
+    this._visibilityHandler = () => {
+      if (document.hidden && GasKo.state.tracking) {
+        this._wasPaused = true;
+      } else if (!document.hidden && this._wasPaused) {
+        this._wasPaused = false;
+        this._showBgWarning();
+      }
+    };
+    document.addEventListener('visibilitychange', this._visibilityHandler);
+
+    // 5. Warn before closing tab/browser
+    this._unloadHandler = e => {
+      e.preventDefault();
+      e.returnValue = 'A trip is being recorded. Leave anyway?';
+    };
+    window.addEventListener('beforeunload', this._unloadHandler);
+  },
+
+  stopAmbient() {
+    // Release wake lock
+    if (this._wakeLock) { this._wakeLock.release(); this._wakeLock = null; }
+    // Close notification
+    if (this._trackingNotif) { this._trackingNotif.close(); this._trackingNotif = null; }
+    // Hide tracking bar
+    const bar = document.getElementById('tracking-bar');
+    if (bar) bar.classList.add('hidden');
+    const warn = document.getElementById('bg-warning-banner');
+    if (warn) warn.classList.add('hidden');
+    // Remove event listeners
+    if (this._visibilityHandler) document.removeEventListener('visibilitychange', this._visibilityHandler);
+    if (this._unloadHandler) window.removeEventListener('beforeunload', this._unloadHandler);
+    this._visibilityHandler = null; this._unloadHandler = null;
+  },
+
+  _updateTrackingNotif() {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    if (!GasKo.state.tracking) return;
+    const st = GasKo.state;
+    const dist = st.totalDistance.toFixed(2);
+    const speed = st.currentSpeed;
+    const elapsed = Date.now() - (st.tripStart || Date.now());
+    const min = Math.floor(elapsed / 60000);
+    if (this._trackingNotif) this._trackingNotif.close();
+    this._trackingNotif = new Notification('GasKo — Trip Recording 🚗', {
+      body: `📍 ${dist} km  ⚡ ${speed} km/h  ⏱ ${min} min\nKeep GasKo open for continuous GPS tracking.`,
+      tag: 'gasko-tracking',
+      silent: true,
+      requireInteraction: true
+    });
+    this._trackingNotif.onclick = () => { window.focus(); this._trackingNotif.close(); };
+  },
+
+  _showBgWarning() {
+    const warn = document.getElementById('bg-warning-banner');
+    if (warn) {
+      warn.classList.remove('hidden');
+      // Auto-hide after 10s
+      clearTimeout(this._warnTimeout);
+      this._warnTimeout = setTimeout(() => warn.classList.add('hidden'), 10000);
+    }
+    this.toast('⚠️ GPS paused while app was in background', 'error');
+  },
+
 
   // ---- Update Dashboard ----
   updateDashboard() {

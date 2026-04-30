@@ -396,6 +396,48 @@ a { color: var(--primary); text-decoration: none; }
 }
 .about-developer strong { color: var(--primary); }
 
+/* ===== TRACKING BAR ===== */
+.tracking-bar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 9000;
+  display: flex; align-items: center; gap: 0.75rem;
+  background: rgba(74,222,128,0.12); border-top: 1px solid rgba(74,222,128,0.4);
+  backdrop-filter: blur(12px); padding: 0.6rem 1.25rem;
+  font-size: 0.82rem; color: #4ade80; font-weight: 500;
+}
+.tracking-bar.hidden { display: none; }
+.tracking-bar-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: #4ade80; flex-shrink: 0;
+  animation: trackPulse 1.2s ease-in-out infinite;
+}
+@keyframes trackPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.4)} }
+.tracking-bar span { flex: 1; }
+.tracking-bar-close {
+  background: rgba(244,63,94,0.15); border: 1px solid rgba(244,63,94,0.4);
+  color: #f43f5e; padding: 0.25rem 0.75rem; border-radius: var(--radius-sm);
+  font-size: 0.75rem; cursor: pointer; white-space: nowrap; transition: all 0.2s;
+}
+.tracking-bar-close:hover { background: rgba(244,63,94,0.3); }
+
+/* ===== BACKGROUND WARNING BANNER ===== */
+.bg-warning-banner {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 9001;
+  display: flex; align-items: center; gap: 0.75rem;
+  background: rgba(251,191,36,0.15); border-bottom: 1px solid rgba(251,191,36,0.4);
+  backdrop-filter: blur(12px); padding: 0.75rem 1.25rem;
+  animation: slideDown 0.3s ease;
+}
+.bg-warning-banner.hidden { display: none; }
+@keyframes slideDown { from{transform:translateY(-100%)} to{transform:translateY(0)} }
+.bg-warn-icon { font-size: 1.25rem; flex-shrink: 0; }
+.bg-warn-text { flex: 1; display: flex; flex-direction: column; gap: 0.1rem; }
+.bg-warn-text strong { color: #fbbf24; font-size: 0.85rem; }
+.bg-warn-text span { color: var(--text-muted); font-size: 0.78rem; }
+.bg-warn-close {
+  background: none; border: none; color: var(--text-muted); font-size: 1rem;
+  cursor: pointer; padding: 0.25rem; flex-shrink: 0;
+}
+.bg-warn-close:hover { color: var(--text); }
+
 /* ===== AUTH / ACCOUNT ===== */
 .auth-layout { display: flex; justify-content: center; padding-top: 1rem; }
 .auth-card { width: 100%; max-width: 400px; padding: 2rem; }

@@ -25,6 +25,23 @@
 </head>
 <body>
 
+  <!-- ===== TRACKING STATUS BAR (shown during active trip) ===== -->
+  <div id="tracking-bar" class="tracking-bar hidden">
+    <div class="tracking-bar-dot"></div>
+    <span>GPS Recording — Keep app open for accurate tracking</span>
+    <button class="tracking-bar-close" onclick="App.endTrip()" title="End Trip">■ End Trip</button>
+  </div>
+
+  <!-- ===== BACKGROUND WARNING BANNER ===== -->
+  <div id="bg-warning-banner" class="bg-warning-banner hidden">
+    <div class="bg-warn-icon">⚠️</div>
+    <div class="bg-warn-text">
+      <strong>GPS was paused</strong>
+      <span>App was in the background. Keep GasKo open while driving.</span>
+    </div>
+    <button onclick="document.getElementById('bg-warning-banner').classList.add('hidden')" class="bg-warn-close">✕</button>
+  </div>
+
   <!-- ============================================ -->
   <!-- SIDEBAR NAVIGATION                           -->
   <!-- ============================================ -->
