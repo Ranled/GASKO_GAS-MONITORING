@@ -30,12 +30,14 @@ const CloudSync = {
           flowType: 'implicit',
           autoRefreshToken: true,
           detectSessionInUrl: false,
-          // Disable Web Locks — eliminates the 5-second lock delay in vanilla JS
           lock: (_name, _timeout, fn) => fn()
         }
       });
       this.initialized = true;
       console.log('GasKo: Supabase initialized successfully.');
+      // Warm up the Supabase connection immediately so sign-in is fast
+      // This pre-establishes the TCP connection before user clicks Sign In
+      fetch(`${SUPABASE_URL}/auth/v1/health`, { method: 'GET' }).catch(() => {});
       this.checkSession();
       this.listenAuthChanges();
     } catch (e) {
@@ -50,9 +52,11 @@ const CloudSync = {
     const { data: { session } } = await sbClient.auth.getSession();
     if (session) {
       this.user = session.user;
-      await this.ensureVehicle();
+      // Update UI immediately — DB setup runs in background
       this.updateAuthUI();
-      this.syncFromCloud();
+      this.ensureVehicle()
+        .then(() => this.syncFromCloud())
+        .catch(e => console.error('GasKo: checkSession sync error:', e));
     }
     return session;
   },
