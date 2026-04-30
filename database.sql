@@ -1,9 +1,9 @@
 -- =============================================
--- GasKo Database Schema
--- Run this in Supabase SQL Editor (supabase.com → your project → SQL Editor)
+-- GasKo Database Setup (Safe Re-run Version)
+-- Run this in Supabase SQL Editor
 -- =============================================
 
--- 1. Vehicles table
+-- 1. Create tables if they don't exist
 CREATE TABLE IF NOT EXISTS vehicles (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -17,7 +17,6 @@ CREATE TABLE IF NOT EXISTS vehicles (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 2. Trips table
 CREATE TABLE IF NOT EXISTS trips (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -38,7 +37,6 @@ CREATE TABLE IF NOT EXISTS trips (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 3. Fuel logs table (for calibration)
 CREATE TABLE IF NOT EXISTS fuel_logs (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -51,37 +49,39 @@ CREATE TABLE IF NOT EXISTS fuel_logs (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 4. Row Level Security (RLS) - users can only see their own data
+-- 2. Enable RLS
 ALTER TABLE vehicles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE trips ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fuel_logs ENABLE ROW LEVEL SECURITY;
 
--- Vehicles policies
-CREATE POLICY "Users can view own vehicles" ON vehicles
-  FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own vehicles" ON vehicles
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own vehicles" ON vehicles
-  FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete own vehicles" ON vehicles
-  FOR DELETE USING (auth.uid() = user_id);
+-- 3. Drop existing policies (safe to re-run)
+DROP POLICY IF EXISTS "Users can view own vehicles" ON vehicles;
+DROP POLICY IF EXISTS "Users can insert own vehicles" ON vehicles;
+DROP POLICY IF EXISTS "Users can update own vehicles" ON vehicles;
+DROP POLICY IF EXISTS "Users can delete own vehicles" ON vehicles;
 
--- Trips policies
-CREATE POLICY "Users can view own trips" ON trips
-  FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own trips" ON trips
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own trips" ON trips
-  FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete own trips" ON trips
-  FOR DELETE USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can view own trips" ON trips;
+DROP POLICY IF EXISTS "Users can insert own trips" ON trips;
+DROP POLICY IF EXISTS "Users can update own trips" ON trips;
+DROP POLICY IF EXISTS "Users can delete own trips" ON trips;
 
--- Fuel logs policies
-CREATE POLICY "Users can view own fuel_logs" ON fuel_logs
-  FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own fuel_logs" ON fuel_logs
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own fuel_logs" ON fuel_logs
-  FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users can delete own fuel_logs" ON fuel_logs
-  FOR DELETE USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can view own fuel_logs" ON fuel_logs;
+DROP POLICY IF EXISTS "Users can insert own fuel_logs" ON fuel_logs;
+DROP POLICY IF EXISTS "Users can update own fuel_logs" ON fuel_logs;
+DROP POLICY IF EXISTS "Users can delete own fuel_logs" ON fuel_logs;
+
+-- 4. Re-create policies
+CREATE POLICY "Users can view own vehicles" ON vehicles FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own vehicles" ON vehicles FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own vehicles" ON vehicles FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own vehicles" ON vehicles FOR DELETE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can view own trips" ON trips FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own trips" ON trips FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own trips" ON trips FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own trips" ON trips FOR DELETE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can view own fuel_logs" ON fuel_logs FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own fuel_logs" ON fuel_logs FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own fuel_logs" ON fuel_logs FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own fuel_logs" ON fuel_logs FOR DELETE USING (auth.uid() = user_id);

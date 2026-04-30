@@ -220,5 +220,61 @@ const GasKo = {
     a.download = `gasko_trips_${new Date().toISOString().slice(0,10)}.csv`;
     a.click();
     App.toast('CSV exported!', 'success');
+  },
+
+  // ---- CSV Import ----
+  importCSV(csvText) {
+    const lines = csvText.trim().split('\n');
+    if (lines.length < 2) { App.toast('CSV file is empty or invalid', 'error'); return 0; }
+
+    const header = lines[0].toLowerCase();
+    const isGaskoFormat = header.includes('trip id') && header.includes('distance');
+    if (!isGaskoFormat) {
+      App.toast('Invalid CSV format. Use a GasKo-exported file.', 'error');
+      return 0;
+    }
+
+    const existing = this.getTrips();
+    const existingIds = new Set(existing.map(t => t.id));
+    let imported = 0;
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      // Split by comma, handle quoted values
+      const cols = line.match(/(\'[^\']*\'|"[^"]*"|[^,]+)/g) || line.split(',');
+      if (cols.length < 10) continue;
+
+      const id = cols[0].trim().replace(/[\'"]/g, '');
+      if (existingIds.has(id)) continue; // skip duplicates
+
+      const dateStr = cols[1].trim().replace(/[\'"]/g, '');
+      const startTime = new Date(dateStr).getTime() || Date.now();
+
+      const trip = {
+        id,
+        startTime,
+        endTime: startTime + (parseFloat(cols[9]) || 0) * 60000,
+        distance: parseFloat(cols[2]) || 0,
+        fuelUsed: parseFloat(cols[3]) || 0,
+        cost: parseFloat(cols[4]) || 0,
+        fuelPrice: this.getSettings().fuelPrice,
+        avgSpeed: parseFloat(cols[5]) || 0,
+        maxSpeed: parseFloat(cols[6]) || 0,
+        efficiencyUsed: parseFloat(cols[7]) || 0,
+        drivingScore: parseFloat(cols[8]) || 0,
+        duration: (parseFloat(cols[9]) || 0) * 60000,
+        route: [],
+        behaviorInsight: 'Imported from CSV'
+      };
+      existing.push(trip);
+      existingIds.add(id);
+      imported++;
+    }
+
+    // Sort newest first
+    existing.sort((a, b) => b.startTime - a.startTime);
+    this.saveTrips(existing);
+    return imported;
   }
 };

@@ -480,6 +480,28 @@ const App = {
         location.reload();
       }
     });
+
+    // Import CSV
+    const csvInput = document.getElementById('csv-import-input');
+    document.getElementById('btn-import-csv')?.addEventListener('click', () => csvInput.click());
+    csvInput?.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (!file.name.endsWith('.csv')) { this.toast('Please select a .csv file', 'error'); return; }
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const count = GasKo.importCSV(ev.target.result);
+        if (count > 0) {
+          this.toast(`Imported ${count} new trip${count > 1 ? 's' : ''}!`, 'success');
+          this.renderTrips();
+          this.updateChartsData();
+        } else if (count === 0) {
+          this.toast('No new trips found (all already exist)', 'info');
+        }
+        csvInput.value = ''; // reset so same file can be re-imported
+      };
+      reader.readAsText(file);
+    });
   },
   // ---- Auth ----
   bindAuth() {
