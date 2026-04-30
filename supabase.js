@@ -80,14 +80,34 @@ const CloudSync = {
     console.log('GasKo: signUp called', email);
     if (!this.initialized) {
       App.toast('Cloud sync unavailable — check connection', 'error');
-      console.error('GasKo: signUp failed — not initialized');
       return;
     }
     try {
       const { data, error } = await sbClient.auth.signUp({ email, password });
       console.log('GasKo: signUp result', { data, error });
-      if (error) { App.toast(error.message, 'error'); return null; }
-      App.toast('Account created! Check your email to confirm.', 'success');
+      if (error) {
+        // "User already registered" → guide them to Sign In instead
+        if (error.message.toLowerCase().includes('already registered') ||
+            error.message.toLowerCase().includes('already been registered') ||
+            error.status === 422) {
+          App.toast('Account already exists — switching to Sign In', 'info');
+          // Auto-switch to Sign In tab
+          document.getElementById('tab-login')?.click();
+          // Pre-fill the email in sign-in form
+          const loginEmail = document.getElementById('login-email');
+          if (loginEmail) loginEmail.value = email;
+          document.getElementById('login-password')?.focus();
+          return null;
+        }
+        App.toast(error.message, 'error');
+        return null;
+      }
+      App.toast('Account created! You can now sign in.', 'success');
+      // Auto-switch to Sign In tab after successful signup
+      document.getElementById('tab-login')?.click();
+      const loginEmail = document.getElementById('login-email');
+      if (loginEmail) loginEmail.value = email;
+      document.getElementById('login-password')?.focus();
       return data;
     } catch (e) {
       console.error('GasKo: signUp exception:', e);
