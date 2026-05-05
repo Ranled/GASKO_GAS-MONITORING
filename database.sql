@@ -85,3 +85,60 @@ CREATE POLICY "Users can view own fuel_logs" ON fuel_logs FOR SELECT USING (auth
 CREATE POLICY "Users can insert own fuel_logs" ON fuel_logs FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update own fuel_logs" ON fuel_logs FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete own fuel_logs" ON fuel_logs FOR DELETE USING (auth.uid() = user_id);
+
+-- =============================================
+-- FRIENDS SYSTEM (run this in addition to above)
+-- =============================================
+
+-- 5. User profiles view (exposes email for friend lookup, safe)
+CREATE OR REPLACE VIEW user_profiles AS
+  SELECT id AS user_id, email
+  FROM auth.users;
+
+-- Grant select on view (anon + authenticated)
+GRANT SELECT ON user_profiles TO authenticated;
+
+-- 6. Friendships table
+CREATE TABLE IF NOT EXISTS friendships (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  requester_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  addressee_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined')),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (requester_id, addressee_id)
+);
+
+ALTER TABLE friendships ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view their friendships" ON friendships;
+DROP POLICY IF EXISTS "Users can send friend requests" ON friendships;
+DROP POLICY IF EXISTS "Users can update their friendships" ON friendships;
+DROP POLICY IF EXISTS "Users can delete their friendships" ON friendships;
+
+CREATE POLICY "Users can view their friendships" ON friendships
+  FOR SELECT USING (auth.uid() = requester_id OR auth.uid() = addressee_id);
+
+CREATE POLICY "Users can send friend requests" ON friendships
+  FOR INSERT WITH CHECK (auth.uid() = requester_id);
+
+CREATE POLICY "Users can update their friendships" ON friendships
+  FOR UPDATE USING (auth.uid() = addressee_id);
+
+CREATE POLICY "Users can delete their friendships" ON friendships
+  FOR DELETE USING (auth.uid() = requester_id OR auth.uid() = addressee_id);
+
+-- Allow friends to view each other's trips (for stats)
+DROP POLICY IF EXISTS "Friends can view each other trips" ON trips;
+CREATE POLICY "Friends can view each other trips" ON trips
+  FOR SELECT USING (
+    auth.uid() = user_id
+    OR EXISTS (
+      SELECT 1 FROM friendships f
+      WHERE f.status = 'accepted'
+        AND (
+          (f.requester_id = auth.uid() AND f.addressee_id = trips.user_id)
+          OR (f.addressee_id = auth.uid() AND f.requester_id = trips.user_id)
+        )
+    )
+  );
+

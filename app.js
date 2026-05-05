@@ -68,6 +68,7 @@ const App = {
     if (page === 'trips') this.renderTrips();
     if (page === 'calibrate') { this.renderCalibrationLog(); this.updateCalChart(); }
     if (page === 'dashboard') { this.updateChartsData(); if (this.map) this.map.invalidateSize(); }
+    if (page === 'friends') this.loadFriendsPage();
   },
 
   // ---- Map ----
@@ -262,6 +263,8 @@ const App = {
     const st = GasKo.state;
     document.getElementById('stat-speed').textContent = st.currentSpeed;
     document.getElementById('stat-distance').textContent = st.totalDistance.toFixed(2);
+    const maxSpeedEl = document.getElementById('stat-max-speed');
+    if (maxSpeedEl) maxSpeedEl.textContent = Math.round(st.maxSpeed);
     const fuel = GasKo.calcFuel(st.totalDistance);
     const cost = GasKo.calcCost(fuel);
     document.getElementById('stat-fuel').textContent = fuel.toFixed(3);
@@ -439,6 +442,8 @@ const App = {
     document.getElementById('btn-delete-trip').onclick = () => {
       const trips = GasKo.getTrips().filter(t => t.id !== trip.id);
       GasKo.saveTrips(trips);
+      // Also delete from cloud + mark as deleted to prevent re-sync
+      if (CloudSync.isLoggedIn()) CloudSync.deleteTrip(trip.id).catch(() => {});
       closeModal();
       this.renderTrips();
       this.updateChartsData();
@@ -788,6 +793,199 @@ const App = {
       await CloudSync.syncFromCloud();
       this.toast('Synced from cloud!', 'success');
     });
+  },
+
+  // ---- Friends Page ----
+  loadFriendsPage() {
+    const loginReq = document.getElementById('friends-login-required');
+    const friendsContent = document.getElementById('friends-content');
+    if (!CloudSync.isLoggedIn()) {
+      if (loginReq) loginReq.style.display = '';
+      if (friendsContent) friendsContent.style.display = 'none';
+      return;
+    }
+    if (loginReq) loginReq.style.display = 'none';
+    if (friendsContent) friendsContent.style.display = '';
+
+    // Populate my stats
+    const trips = GasKo.getTrips();
+    const email = CloudSync.user?.email || '';
+    const letter = email.charAt(0).toUpperCase() || '?';
+    const avatarEl = document.getElementById('my-avatar-letter');
+    if (avatarEl) avatarEl.textContent = letter;
+    const unameEl = document.getElementById('my-stats-username');
+    if (unameEl) unameEl.textContent = email.split('@')[0] || email;
+
+    const totalTrips = trips.length;
+    const totalDist = trips.reduce((s, t) => s + (t.distance || 0), 0);
+    const totalCost = trips.reduce((s, t) => s + (t.cost || 0), 0);
+    const avgEff = trips.length ? (trips.reduce((s, t) => s + (t.efficiencyUsed || 0), 0) / trips.length) : 0;
+    const bestMax = trips.length ? Math.max(...trips.map(t => t.maxSpeed || 0)) : 0;
+    const avgScore = trips.length ? (trips.reduce((s, t) => s + (t.drivingScore || 0), 0) / trips.length) : 0;
+
+    const el = id => document.getElementById(id);
+    if (el('my-total-trips')) el('my-total-trips').textContent = totalTrips;
+    if (el('my-total-distance')) el('my-total-distance').textContent = totalDist.toFixed(1);
+    if (el('my-avg-efficiency')) el('my-avg-efficiency').textContent = avgEff.toFixed(1);
+    if (el('my-max-speed-ever')) el('my-max-speed-ever').textContent = Math.round(bestMax) + ' km/h';
+    if (el('my-avg-score')) el('my-avg-score').textContent = avgScore.toFixed(0) + '/100';
+    if (el('my-total-cost')) el('my-total-cost').textContent = '\u20b1' + totalCost.toFixed(0);
+
+    // Load friends from cloud
+    CloudSync.getFriends().then(({ friends, requests }) => {
+      this.renderFriendRequests(requests);
+      this.renderFriendsList(friends);
+    }).catch(() => {});
+  },
+
+  renderFriendRequests(requests) {
+    const section = document.getElementById('friend-requests-section');
+    const listEl = document.getElementById('friend-requests-list');
+    if (!section || !listEl) return;
+    if (!requests || !requests.length) { section.style.display = 'none'; return; }
+    section.style.display = '';
+    listEl.innerHTML = '';
+    requests.forEach(req => {
+      const card = document.createElement('div');
+      card.className = 'friend-card';
+      const letter = (req.requester_email || '?').charAt(0).toUpperCase();
+      card.innerHTML = `
+        <div class="friend-avatar" style="background: linear-gradient(135deg,#f59e0b,#d97706)">${letter}</div>
+        <div class="friend-info">
+          <div class="friend-name">${req.requester_email || 'Unknown'}</div>
+          <div class="friend-meta">Wants to be your friend</div>
+        </div>
+        <div class="friend-actions">
+          <button class="btn-friend-action accept" onclick="App.respondFriend('${req.id}', true)">✓ Accept</button>
+          <button class="btn-friend-action remove" onclick="App.respondFriend('${req.id}', false)">✕ Decline</button>
+        </div>`;
+      listEl.appendChild(card);
+    });
+  },
+
+  renderFriendsList(friends) {
+    const container = document.getElementById('friends-list-container');
+    const emptyEl = document.getElementById('friends-empty');
+    if (!container) return;
+    container.querySelectorAll('.friend-card').forEach(c => c.remove());
+    if (!friends || !friends.length) {
+      if (emptyEl) emptyEl.style.display = '';
+      return;
+    }
+    if (emptyEl) emptyEl.style.display = 'none';
+    friends.forEach(f => {
+      const card = document.createElement('div');
+      card.className = 'friend-card';
+      const letter = (f.friend_email || '?').charAt(0).toUpperCase();
+      const trips = f.trips || 0;
+      const dist = f.total_distance ? f.total_distance.toFixed(1) : '—';
+      const score = f.avg_score ? f.avg_score.toFixed(0) : '—';
+      card.innerHTML = `
+        <div class="friend-avatar">${letter}</div>
+        <div class="friend-info">
+          <div class="friend-name">${f.friend_email || 'Unknown'}</div>
+          <div class="friend-meta">${trips} trips · ${dist} km driven</div>
+        </div>
+        <div class="friend-stats-mini">
+          <div class="fsm-item">
+            <div class="fsm-val">${dist} km</div>
+            <div class="fsm-label">Distance</div>
+          </div>
+          <div class="fsm-item">
+            <div class="fsm-val">${score}/100</div>
+            <div class="fsm-label">Drive Score</div>
+          </div>
+        </div>
+        <div class="friend-actions">
+          <button class="btn-friend-action remove" onclick="App.removeFriend('${f.friendship_id}')">Remove</button>
+        </div>`;
+      container.appendChild(card);
+    });
+  },
+
+  async addFriend() {
+    if (!CloudSync.isLoggedIn()) { this.toast('Sign in first', 'error'); return; }
+    const emailInput = document.getElementById('friend-email-input');
+    const email = emailInput?.value.trim();
+    if (!email) { this.toast('Enter a friend\'s email', 'error'); return; }
+    if (email === CloudSync.user?.email) { this.toast('You cannot add yourself!', 'error'); return; }
+    const btn = document.getElementById('btn-add-friend');
+    if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+    const ok = await CloudSync.sendFriendRequest(email);
+    if (btn) { btn.disabled = false; btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg> Add Friend`; }
+    if (ok && emailInput) emailInput.value = '';
+  },
+
+  async respondFriend(requestId, accept) {
+    await CloudSync.respondFriendRequest(requestId, accept);
+    this.loadFriendsPage();
+  },
+
+  async removeFriend(friendshipId) {
+    if (!confirm('Remove this friend?')) return;
+    await CloudSync.removeFriend(friendshipId);
+    this.loadFriendsPage();
+  },
+
+  shareMyStats() {
+    const trips = GasKo.getTrips();
+    if (!trips.length) { this.toast('No trips to share yet!', 'info'); return; }
+    const totalTrips = trips.length;
+    const totalDist = trips.reduce((s, t) => s + (t.distance || 0), 0);
+    const totalCost = trips.reduce((s, t) => s + (t.cost || 0), 0);
+    const avgEff = (trips.reduce((s, t) => s + (t.efficiencyUsed || 0), 0) / trips.length);
+    const bestMax = Math.max(...trips.map(t => t.maxSpeed || 0));
+    const avgScore = (trips.reduce((s, t) => s + (t.drivingScore || 0), 0) / trips.length);
+    const vehicle = GasKo.getSettings().vehicleName;
+    const email = CloudSync.user?.email || 'Driver';
+
+    const shareText = `\uD83D\uDE97 GasKo Stats — ${email.split('@')[0]}\n` +
+      `Vehicle: ${vehicle}\n` +
+      `Trips: ${totalTrips} | Distance: ${totalDist.toFixed(1)} km\n` +
+      `Avg Efficiency: ${avgEff.toFixed(1)} km/L\n` +
+      `Best Max Speed: ${Math.round(bestMax)} km/h\n` +
+      `Avg Drive Score: ${avgScore.toFixed(0)}/100\n` +
+      `Total Fuel Cost: \u20b1${totalCost.toFixed(0)}\n` +
+      `Tracked with GasKo`;
+
+    // Show share modal
+    this._showShareModal(shareText, { totalTrips, totalDist: totalDist.toFixed(1), avgEff: avgEff.toFixed(1), bestMax: Math.round(bestMax), avgScore: avgScore.toFixed(0), totalCost: totalCost.toFixed(0) });
+  },
+
+  _showShareModal(text, stats) {
+    // Remove existing
+    document.getElementById('gasko-share-modal')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'gasko-share-modal';
+    overlay.className = 'share-modal-overlay';
+    overlay.innerHTML = `
+      <div class="share-modal">
+        <div class="share-modal-header">
+          <h2>\uD83D\uDE97 Share My Stats</h2>
+          <button class="modal-close" onclick="document.getElementById('gasko-share-modal').remove()">&times;</button>
+        </div>
+        <div class="share-stats-grid">
+          <div class="share-stat-item"><span class="ssi-val">${stats.totalTrips}</span><span class="ssi-label">Total Trips</span></div>
+          <div class="share-stat-item"><span class="ssi-val">${stats.totalDist} km</span><span class="ssi-label">Distance</span></div>
+          <div class="share-stat-item"><span class="ssi-val">${stats.avgEff} km/L</span><span class="ssi-label">Avg Efficiency</span></div>
+          <div class="share-stat-item"><span class="ssi-val">${stats.bestMax} km/h</span><span class="ssi-label">Best Max Speed</span></div>
+          <div class="share-stat-item"><span class="ssi-val">${stats.avgScore}/100</span><span class="ssi-label">Drive Score</span></div>
+          <div class="share-stat-item"><span class="ssi-val">\u20b1${stats.totalCost}</span><span class="ssi-label">Total Spent</span></div>
+        </div>
+        <div class="share-copy-area" id="share-text-area">${text}</div>
+        <div class="share-actions">
+          <button class="btn btn-outline" onclick="
+            const el = document.getElementById('share-text-area');
+            navigator.clipboard.writeText(el.textContent).then(() => App.toast('Copied to clipboard!','success'));
+          ">\uD83D\uDCCB Copy</button>
+          <button class="btn btn-primary" onclick="
+            if(navigator.share){navigator.share({title:'GasKo Stats',text:document.getElementById('share-text-area').textContent}).catch(()=>{});}else{App.toast('Sharing not supported on this browser','info');}
+          ">\uD83D\uDCE4 Share</button>
+        </div>
+      </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
   }
 };
 

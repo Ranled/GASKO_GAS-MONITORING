@@ -139,6 +139,15 @@
         </svg>
         <span>Settings</span>
       </button>
+      <button class="nav-item" data-page="friends" id="nav-friends">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+        <span>Friends</span>
+      </button>
       <button class="nav-item" data-page="auth" id="nav-auth">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
@@ -233,7 +242,7 @@
       </div>
 
       <!-- Stats Cards Row -->
-      <div class="stats-grid">
+      <div class="stats-grid stats-grid-5">
         <div class="stat-card" id="card-speed">
           <div class="stat-icon speed-icon">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -245,6 +254,23 @@
           <div class="stat-info">
             <span class="stat-label">Speed</span>
             <span class="stat-value" id="stat-speed">0</span>
+            <span class="stat-unit">km/h</span>
+          </div>
+        </div>
+
+        <div class="stat-card" id="card-max-speed">
+          <div class="stat-icon maxspeed-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2L12 8"/>
+              <path d="M12 2l-3 3"/>
+              <path d="M12 2l3 3"/>
+              <circle cx="12" cy="14" r="8"/>
+              <path d="M12 14l3.5-3"/>
+            </svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-label">Max Speed</span>
+            <span class="stat-value" id="stat-max-speed">0</span>
             <span class="stat-unit">km/h</span>
           </div>
         </div>
@@ -627,6 +653,95 @@
               </ul>
             </div>
             <p class="about-developer">👨‍💻 Developed by <strong>Raian Lee D. Vallejo</strong>, a Computer Science Student.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- PAGE: FRIENDS                              -->
+    <!-- ========================================== -->
+    <section id="page-friends" class="page">
+      <div class="page-header">
+        <h1>Friends</h1>
+        <p class="page-desc">Connect with friends and compare driving statistics.</p>
+      </div>
+
+      <!-- Require login notice -->
+      <div id="friends-login-required" class="friends-login-notice glass-card">
+        <div class="friends-login-icon">🔒</div>
+        <h3>Sign in Required</h3>
+        <p>Sign in to your account to add friends and share your driving statistics.</p>
+        <button class="btn btn-primary" onclick="App.showPage('auth')">Sign In to Continue</button>
+      </div>
+
+      <div id="friends-content" style="display:none">
+        <!-- My Stats Card -->
+        <div class="friends-stats-card glass-card">
+          <div class="friends-stats-header">
+            <div class="friends-avatar-large" id="my-avatar-letter">?</div>
+            <div class="friends-stats-info">
+              <h3 id="my-stats-username">Loading...</h3>
+              <span class="friends-stats-badge">My Stats</span>
+            </div>
+            <button class="btn btn-outline" onclick="App.shareMyStats()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+              Share My Stats
+            </button>
+          </div>
+          <div class="friends-my-stats-grid">
+            <div class="friends-stat-item">
+              <span class="fsi-val" id="my-total-trips">—</span>
+              <span class="fsi-label">Total Trips</span>
+            </div>
+            <div class="friends-stat-item">
+              <span class="fsi-val" id="my-total-distance">—</span>
+              <span class="fsi-label">Total km</span>
+            </div>
+            <div class="friends-stat-item">
+              <span class="fsi-val" id="my-avg-efficiency">—</span>
+              <span class="fsi-label">Avg km/L</span>
+            </div>
+            <div class="friends-stat-item">
+              <span class="fsi-val" id="my-max-speed-ever">—</span>
+              <span class="fsi-label">Best Max Speed</span>
+            </div>
+            <div class="friends-stat-item">
+              <span class="fsi-val" id="my-avg-score">—</span>
+              <span class="fsi-label">Avg Drive Score</span>
+            </div>
+            <div class="friends-stat-item">
+              <span class="fsi-val" id="my-total-cost">—</span>
+              <span class="fsi-label">Total Spent</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Add Friend -->
+        <div class="friends-add-section glass-card">
+          <h2 class="section-title">Add Friend by Email</h2>
+          <div class="friends-add-form">
+            <input type="email" id="friend-email-input" placeholder="friend@example.com" class="friends-input">
+            <button class="btn btn-primary" id="btn-add-friend" onclick="App.addFriend()">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+              Add Friend
+            </button>
+          </div>
+        </div>
+
+        <!-- Friend Requests -->
+        <div id="friend-requests-section" class="friends-section-card glass-card" style="display:none">
+          <h2 class="section-title">📬 Friend Requests</h2>
+          <div id="friend-requests-list" class="friends-list"></div>
+        </div>
+
+        <!-- Friends List -->
+        <div class="friends-section-card glass-card">
+          <h2 class="section-title">My Friends</h2>
+          <div id="friends-list-container" class="friends-list">
+            <div class="empty-state small" id="friends-empty">
+              <p>No friends yet. Add someone by email above!</p>
+            </div>
           </div>
         </div>
       </div>
