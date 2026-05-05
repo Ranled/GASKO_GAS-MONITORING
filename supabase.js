@@ -11,6 +11,7 @@ let sbClient = null; // renamed from `supabase` to avoid CDN naming conflict
 const CloudSync = {
   user: null,
   vehicleId: null,
+  profile: null,
   initialized: false,
 
   // ---- Initialize Supabase ----
@@ -53,7 +54,8 @@ const CloudSync = {
     const { data: { session } } = await sbClient.auth.getSession();
     if (session) {
       this.user = session.user;
-      // Update UI immediately — DB setup runs in background
+      // Load profile then update UI — DB setup runs in background
+      await this.loadProfile();
       this.updateAuthUI();
       this.ensureVehicle()
         .then(() => this.syncFromCloud())
@@ -68,12 +70,14 @@ const CloudSync = {
       if (event === 'SIGNED_IN' && session) {
         this.user = session.user;
         await this.ensureVehicle();
+        await this.loadProfile();
         this.updateAuthUI();
         this.syncFromCloud();
         App.toast('Signed in! Data syncing...', 'success');
       } else if (event === 'SIGNED_OUT') {
         this.user = null;
         this.vehicleId = null;
+        this.profile = null;
         this.updateAuthUI();
         App.toast('Signed out', 'info');
       }
@@ -81,24 +85,31 @@ const CloudSync = {
   },
 
 
-  async signUp(email, password) {
-    console.log('GasKo: signUp called', email);
+  async signUp(email, password, username) {
+    console.log('GasKo: signUp called', email, 'username:', username);
     if (!this.initialized) {
       App.toast('Cloud sync unavailable — check connection', 'error');
       return;
     }
+    // Validate username
+    if (!username || username.trim().length < 3) {
+      App.toast('Username must be at least 3 characters', 'error');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(username.trim())) {
+      App.toast('Username may only contain letters, numbers, and underscores', 'error');
+      return;
+    }
+    const cleanUsername = username.trim().toLowerCase();
     try {
       const { data, error } = await sbClient.auth.signUp({ email, password });
       console.log('GasKo: signUp result', { data, error });
       if (error) {
-        // "User already registered" → guide them to Sign In instead
         if (error.message.toLowerCase().includes('already registered') ||
             error.message.toLowerCase().includes('already been registered') ||
             error.status === 422) {
           App.toast('Account already exists — switching to Sign In', 'info');
-          // Auto-switch to Sign In tab
           document.getElementById('tab-login')?.click();
-          // Pre-fill the email in sign-in form
           const loginEmail = document.getElementById('login-email');
           if (loginEmail) loginEmail.value = email;
           document.getElementById('login-password')?.focus();
@@ -107,8 +118,11 @@ const CloudSync = {
         App.toast(error.message, 'error');
         return null;
       }
+      // Create profile row right after sign-up (user may need email confirm first)
+      if (data?.user) {
+        await this.createProfile(data.user.id, cleanUsername);
+      }
       App.toast('Account created! You can now sign in.', 'success');
-      // Auto-switch to Sign In tab after successful signup
       document.getElementById('tab-login')?.click();
       const loginEmail = document.getElementById('login-email');
       if (loginEmail) loginEmail.value = email;
@@ -405,35 +419,185 @@ const CloudSync = {
       if (loginForm) loginForm.style.display = 'none';
       if (loggedInView) loggedInView.style.display = 'block';
       if (userEmail) userEmail.textContent = this.user.email;
-      if (navAuth) navAuth.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>${this.user.email.split('@')[0]}</span>`;
+
+      // Profile display
+      const p = this.profile;
+      const displayName = p?.display_name || p?.username || this.user.email.split('@')[0];
+      const username = p?.username || '';
+      const avatarUrl = p?.avatar_url || '';
+      const letter = displayName.charAt(0).toUpperCase();
+
+      const dispUsernameEl = document.getElementById('profile-display-username');
+      if (dispUsernameEl) dispUsernameEl.textContent = displayName;
+      const tagEl = document.getElementById('profile-tag-display');
+      if (tagEl) tagEl.textContent = username ? '@' + username : '(no username set)';
+
+      // Avatar — both on account page and settings page
+      this._applyAvatar('profile-avatar-img', 'profile-avatar-letter', avatarUrl, letter);
+      this._applyAvatar('profile-settings-img', 'profile-settings-letter', avatarUrl, letter);
+
+      // Friends page my-avatar
+      const friendsAvatarEl = document.getElementById('my-avatar-letter');
+      if (friendsAvatarEl) {
+        if (avatarUrl) {
+          friendsAvatarEl.style.backgroundImage = `url(${avatarUrl})`;
+          friendsAvatarEl.style.backgroundSize = 'cover';
+          friendsAvatarEl.textContent = '';
+        } else {
+          friendsAvatarEl.textContent = letter;
+        }
+      }
+
+      // Pre-fill settings profile form
+      const setUsername = document.getElementById('set-username');
+      const setDisplayName = document.getElementById('set-display-name');
+      if (setUsername) setUsername.value = username;
+      if (setDisplayName) setDisplayName.value = p?.display_name || '';
+      // Show profile card in settings
+      const profileCard = document.getElementById('profile-settings-card');
+      if (profileCard) profileCard.style.display = '';
+
+      // Nav button — show display name or username
+      if (navAuth) navAuth.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>${displayName}</span>`;
       if (syncBadge) syncBadge.classList.remove('hidden');
     } else {
       if (loginForm) loginForm.style.display = 'block';
       if (loggedInView) loggedInView.style.display = 'none';
       if (navAuth) navAuth.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg><span>Sign In</span>`;
       if (syncBadge) syncBadge.classList.add('hidden');
+      const profileCard = document.getElementById('profile-settings-card');
+      if (profileCard) profileCard.style.display = 'none';
     }
     // Refresh friends page if currently open
     if (App.currentPage === 'friends') App.loadFriendsPage();
   },
 
+  _applyAvatar(imgId, letterId, avatarUrl, letter) {
+    const img = document.getElementById(imgId);
+    const span = document.getElementById(letterId);
+    if (!img || !span) return;
+    if (avatarUrl) {
+      img.src = avatarUrl;
+      img.style.display = '';
+      span.style.display = 'none';
+    } else {
+      img.style.display = 'none';
+      span.style.display = '';
+      span.textContent = letter;
+    }
+  },
+
   isLoggedIn() { return !!this.user; },
+
+  // ========== PROFILE SYSTEM ==========
+
+  async createProfile(userId, username, displayName) {
+    if (!this.initialized) return;
+    try {
+      const { error } = await sbClient.from('user_profiles').upsert({
+        user_id: userId,
+        username: username || null,
+        display_name: displayName || '',
+        avatar_url: '',
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+      if (error) console.error('GasKo: createProfile error:', error.message);
+    } catch (e) { console.error('GasKo: createProfile exception:', e); }
+  },
+
+  async loadProfile() {
+    if (!this.initialized || !this.user) return null;
+    try {
+      const { data, error } = await sbClient
+        .from('user_profiles')
+        .select('username, display_name, avatar_url')
+        .eq('user_id', this.user.id)
+        .maybeSingle();
+      if (error) { console.error('GasKo: loadProfile error:', error.message); return null; }
+      this.profile = data || {};
+      return this.profile;
+    } catch (e) { console.error('GasKo: loadProfile exception:', e); return null; }
+  },
+
+  async updateProfile(username, displayName) {
+    if (!this.initialized || !this.user) return false;
+    // Validate username
+    if (username && !/^[a-zA-Z0-9_]+$/.test(username)) {
+      App.toast('Username may only contain letters, numbers, and underscores', 'error');
+      return false;
+    }
+    if (username && username.length < 3) {
+      App.toast('Username must be at least 3 characters', 'error');
+      return false;
+    }
+    try {
+      const { error } = await sbClient.from('user_profiles').upsert({
+        user_id: this.user.id,
+        username: username ? username.toLowerCase() : null,
+        display_name: displayName || '',
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+      if (error) {
+        if (error.message.includes('unique') || error.code === '23505') {
+          App.toast('That username is taken. Try another!', 'error');
+        } else {
+          App.toast('Profile save failed: ' + error.message, 'error');
+        }
+        return false;
+      }
+      if (!this.profile) this.profile = {};
+      this.profile.username = username ? username.toLowerCase() : null;
+      this.profile.display_name = displayName || '';
+      this.updateAuthUI();
+      return true;
+    } catch (e) { console.error('GasKo: updateProfile exception:', e); return false; }
+  },
+
+  async uploadAvatar(file) {
+    if (!this.initialized || !this.user) return null;
+    if (file.size > 2 * 1024 * 1024) { App.toast('Image too large (max 2MB)', 'error'); return null; }
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `${this.user.id}/avatar.${ext}`;
+      const { error: upErr } = await sbClient.storage
+        .from('avatars')
+        .upload(path, file, { upsert: true, contentType: file.type });
+      if (upErr) { App.toast('Avatar upload failed: ' + upErr.message, 'error'); return null; }
+
+      const { data: { publicUrl } } = sbClient.storage.from('avatars').getPublicUrl(path);
+      // Add cache-busting
+      const url = publicUrl + '?t=' + Date.now();
+
+      // Save to profile
+      await sbClient.from('user_profiles').upsert({
+        user_id: this.user.id,
+        avatar_url: url,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+
+      if (!this.profile) this.profile = {};
+      this.profile.avatar_url = url;
+      this.updateAuthUI();
+      App.toast('Profile photo updated! ✨', 'success');
+      return url;
+    } catch (e) { console.error('GasKo: uploadAvatar exception:', e); App.toast('Upload failed', 'error'); return null; }
+  },
 
   // ========== FRIENDS SYSTEM ==========
 
   // ---- Send Friend Request ----
-  async sendFriendRequest(toEmail) {
+  async sendFriendRequest(username) {
     if (!this.initialized || !this.user) return false;
     try {
-      // Look up user id by email via friends_profiles view
+      // Look up user id by username from user_profiles table
       const { data: profile, error: profileErr } = await sbClient
         .from('user_profiles')
-        .select('user_id, email')
-        .eq('email', toEmail)
+        .select('user_id, username, display_name')
+        .eq('username', username.toLowerCase())
         .maybeSingle();
 
       if (profileErr || !profile) {
-        App.toast('User not found. Make sure they have a GasKo account.', 'error');
+        App.toast('User @' + username + ' not found. Make sure they have a GasKo account.', 'error');
         return false;
       }
       if (profile.user_id === this.user.id) {
@@ -444,16 +608,13 @@ const CloudSync = {
       // Check if already friends or request pending
       const { data: existing } = await sbClient
         .from('friendships')
-        .select('id, status')
-        .or(`requester_id.eq.${this.user.id},addressee_id.eq.${this.user.id}`)
-        .or(`requester_id.eq.${profile.user_id},addressee_id.eq.${profile.user_id}`);
+        .select('id, status, requester_id, addressee_id')
+        .or(`and(requester_id.eq.${this.user.id},addressee_id.eq.${profile.user_id}),and(requester_id.eq.${profile.user_id},addressee_id.eq.${this.user.id})`);
 
-      const alreadyExists = existing && existing.some(f =>
-        (f.requester_id === this.user.id && f.addressee_id === profile.user_id) ||
-        (f.requester_id === profile.user_id && f.addressee_id === this.user.id)
-      );
-      if (alreadyExists) {
-        App.toast('Friend request already sent or already friends!', 'info');
+      if (existing && existing.length > 0) {
+        const f = existing[0];
+        if (f.status === 'accepted') { App.toast('Already friends!', 'info'); }
+        else { App.toast('Friend request already sent!', 'info'); }
         return false;
       }
 
@@ -463,7 +624,8 @@ const CloudSync = {
         status: 'pending'
       });
       if (error) { App.toast('Failed to send request: ' + error.message, 'error'); return false; }
-      App.toast(`Friend request sent to ${toEmail}!`, 'success');
+      const name = profile.display_name || '@' + profile.username;
+      App.toast(`Friend request sent to ${name}! 🎉`, 'success');
       return true;
     } catch (e) {
       console.error('GasKo: sendFriendRequest exception:', e);

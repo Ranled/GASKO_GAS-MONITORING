@@ -559,6 +559,40 @@
       </div>
 
       <div class="settings-layout">
+        <!-- Profile Card (only shown when logged in) -->
+        <div class="settings-card glass-card" id="profile-settings-card" style="display:none">
+          <h2 class="section-title">My Profile</h2>
+          <form id="profile-form" class="form">
+            <div class="profile-settings-avatar-row">
+              <div class="profile-avatar profile-avatar-sm" id="profile-settings-avatar">
+                <img id="profile-settings-img" src="" alt="" style="display:none">
+                <span id="profile-settings-letter">?</span>
+              </div>
+              <div style="flex:1">
+                <label class="btn btn-outline" for="avatar-settings-input" style="cursor:pointer;display:inline-flex;align-items:center;gap:.5rem;font-size:.85rem">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  Change Photo
+                </label>
+                <input type="file" id="avatar-settings-input" accept="image/*" style="display:none" onchange="App.uploadAvatar(this)">
+                <p style="font-size:.8rem;color:var(--text-dim);margin-top:.4rem">JPG, PNG or GIF · Max 2MB</p>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="set-username">Username</label>
+              <input type="text" id="set-username" placeholder="e.g. raiandrives" maxlength="32">
+              <span class="input-hint">Friends search by your username. Letters, numbers, underscores only.</span>
+            </div>
+            <div class="form-group">
+              <label for="set-display-name">Display Name</label>
+              <input type="text" id="set-display-name" placeholder="e.g. Raian" maxlength="64">
+            </div>
+            <button type="submit" class="btn btn-primary btn-full" id="btn-save-profile">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+              Save Profile
+            </button>
+          </form>
+        </div>
+
         <div class="settings-card glass-card">
           <h2 class="section-title">Vehicle Configuration</h2>
           <form id="settings-form" class="form">
@@ -719,9 +753,13 @@
 
         <!-- Add Friend -->
         <div class="friends-add-section glass-card">
-          <h2 class="section-title">Add Friend by Email</h2>
+          <h2 class="section-title">Add Friend by Username</h2>
+          <p class="friends-add-desc">Enter their GasKo username (e.g. <em>raiandrives</em>)</p>
           <div class="friends-add-form">
-            <input type="email" id="friend-email-input" placeholder="friend@example.com" class="friends-input">
+            <div class="username-input-wrap">
+              <span class="username-at">@</span>
+              <input type="text" id="friend-username-input" placeholder="username" class="friends-input username-input" maxlength="32">
+            </div>
             <button class="btn btn-primary" id="btn-add-friend" onclick="App.addFriend()">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
               Add Friend
@@ -788,6 +826,11 @@
 
           <form id="form-signup" class="form auth-form" style="display:none">
             <div class="form-group">
+              <label for="signup-username">Username <span style="color:var(--text-dim);font-weight:400">(visible to friends)</span></label>
+              <input type="text" id="signup-username" placeholder="e.g. raiandrives" autocomplete="username" maxlength="32">
+              <span class="input-hint">Letters, numbers, underscores only. Used to add friends.</span>
+            </div>
+            <div class="form-group">
               <label for="signup-email">Email</label>
               <input type="email" id="signup-email" placeholder="you@example.com" autocomplete="email">
             </div>
@@ -816,19 +859,33 @@
         </div>
 
         <!-- Logged In View -->
-        <div id="auth-logged-in" class="auth-card glass-card" style="display:none">
-          <div class="auth-user-info">
-            <div class="auth-avatar">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                <circle cx="12" cy="7" r="4"/>
-              </svg>
+        <div id="auth-logged-in" class="auth-card glass-card auth-profile-card" style="display:none">
+          <!-- Profile Header -->
+          <div class="profile-header">
+            <div class="profile-avatar-wrap">
+              <div class="profile-avatar" id="profile-avatar-display">
+                <img id="profile-avatar-img" src="" alt="" style="display:none">
+                <span id="profile-avatar-letter">?</span>
+              </div>
+              <label class="profile-avatar-edit" for="avatar-upload-input" title="Change photo">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </label>
+              <input type="file" id="avatar-upload-input" accept="image/*" style="display:none" onchange="App.uploadAvatar(this)">
             </div>
-            <div>
-              <p class="auth-email" id="auth-user-email">user@email.com</p>
-              <p class="auth-status-text">✅ Data synced to cloud</p>
+            <div class="profile-info">
+              <h3 class="profile-username" id="profile-display-username">Loading...</h3>
+              <p class="profile-email" id="auth-user-email">user@email.com</p>
+              <span class="auth-status-text">✅ Data synced to cloud</span>
             </div>
           </div>
+
+          <!-- Username tag chip -->
+          <div class="profile-tag-row">
+            <span class="profile-tag-label">Username</span>
+            <span class="profile-tag" id="profile-tag-display">@username</span>
+            <span class="profile-tag-hint">Friends use this to find you</span>
+          </div>
+
           <div class="auth-actions">
             <button id="btn-upload-local" class="btn btn-outline btn-full">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>

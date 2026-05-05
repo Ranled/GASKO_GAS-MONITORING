@@ -90,13 +90,31 @@ CREATE POLICY "Users can delete own fuel_logs" ON fuel_logs FOR DELETE USING (au
 -- FRIENDS SYSTEM (run this in addition to above)
 -- =============================================
 
--- 5. User profiles view (exposes email for friend lookup, safe)
-CREATE OR REPLACE VIEW user_profiles AS
-  SELECT id AS user_id, email
-  FROM auth.users;
+-- 5. User Profiles table (username, display name, avatar)
+CREATE TABLE IF NOT EXISTS user_profiles (
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+  username TEXT UNIQUE,
+  display_name TEXT DEFAULT '',
+  avatar_url TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
 
--- Grant select on view (anon + authenticated)
-GRANT SELECT ON user_profiles TO authenticated;
+ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view all profiles" ON user_profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON user_profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON user_profiles;
+
+-- All logged-in users can search profiles (for friend lookup by username)
+CREATE POLICY "Users can view all profiles" ON user_profiles
+  FOR SELECT USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Users can insert own profile" ON user_profiles
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own profile" ON user_profiles
+  FOR UPDATE USING (auth.uid() = user_id);
 
 -- 6. Friendships table
 CREATE TABLE IF NOT EXISTS friendships (

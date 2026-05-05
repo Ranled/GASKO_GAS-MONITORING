@@ -764,16 +764,18 @@ const App = {
     document.getElementById('form-signup')?.addEventListener('submit', async e => {
       e.preventDefault();
       if (signingUp) return;  // prevent double-submit
+      const username = document.getElementById('signup-username').value.trim();
       const email = document.getElementById('signup-email').value.trim();
       const pw = document.getElementById('signup-password').value;
       const pw2 = document.getElementById('signup-password2').value;
+      if (!username) { this.toast('Please choose a username', 'error'); return; }
       if (!email || !pw) { this.toast('Enter email and password', 'error'); return; }
       if (pw !== pw2) { this.toast('Passwords do not match', 'error'); return; }
       if (pw.length < 6) { this.toast('Password must be at least 6 characters', 'error'); return; }
       const btn = e.submitter || e.target.querySelector('button[type=submit]');
       signingUp = true;
       if (btn) { btn.disabled = true; btn.textContent = 'Creating account...'; }
-      await CloudSync.signUp(email, pw);
+      await CloudSync.signUp(email, pw, username);
       signingUp = false;
       if (btn) { btn.disabled = false; btn.textContent = 'Create Account'; }
     });
@@ -793,6 +795,31 @@ const App = {
       await CloudSync.syncFromCloud();
       this.toast('Synced from cloud!', 'success');
     });
+
+    // Profile form (in Settings page)
+    document.getElementById('profile-form')?.addEventListener('submit', async e => {
+      e.preventDefault();
+      if (!CloudSync.isLoggedIn()) { this.toast('Sign in first', 'error'); return; }
+      const username = document.getElementById('set-username')?.value.trim();
+      const displayName = document.getElementById('set-display-name')?.value.trim();
+      const btn = document.getElementById('btn-save-profile');
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+      const ok = await CloudSync.updateProfile(username, displayName);
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg> Save Profile`;
+      }
+      if (ok) this.toast('Profile saved! \u2728', 'success');
+    });
+  },
+
+  // ---- Avatar Upload Bridge ----
+  async uploadAvatar(input) {
+    const file = input?.files?.[0];
+    if (!file) return;
+    if (!CloudSync.isLoggedIn()) { this.toast('Sign in first', 'error'); return; }
+    await CloudSync.uploadAvatar(file);
+    input.value = ''; // reset so same file can trigger again
   },
 
   // ---- Friends Page ----
@@ -809,12 +836,26 @@ const App = {
 
     // Populate my stats
     const trips = GasKo.getTrips();
-    const email = CloudSync.user?.email || '';
-    const letter = email.charAt(0).toUpperCase() || '?';
+    const p = CloudSync.profile || {};
+    const displayName = p.display_name || p.username || CloudSync.user?.email?.split('@')[0] || 'Me';
+    const username = p.username || '';
+    const avatarUrl = p.avatar_url || '';
+    const letter = displayName.charAt(0).toUpperCase();
+
     const avatarEl = document.getElementById('my-avatar-letter');
-    if (avatarEl) avatarEl.textContent = letter;
+    if (avatarEl) {
+      if (avatarUrl) {
+        avatarEl.style.backgroundImage = `url(${avatarUrl})`;
+        avatarEl.style.backgroundSize = 'cover';
+        avatarEl.style.backgroundPosition = 'center';
+        avatarEl.textContent = '';
+      } else {
+        avatarEl.style.backgroundImage = '';
+        avatarEl.textContent = letter;
+      }
+    }
     const unameEl = document.getElementById('my-stats-username');
-    if (unameEl) unameEl.textContent = email.split('@')[0] || email;
+    if (unameEl) unameEl.textContent = displayName + (username ? ' · @' + username : '');
 
     const totalTrips = trips.length;
     const totalDist = trips.reduce((s, t) => s + (t.distance || 0), 0);
@@ -905,15 +946,17 @@ const App = {
 
   async addFriend() {
     if (!CloudSync.isLoggedIn()) { this.toast('Sign in first', 'error'); return; }
-    const emailInput = document.getElementById('friend-email-input');
-    const email = emailInput?.value.trim();
-    if (!email) { this.toast('Enter a friend\'s email', 'error'); return; }
-    if (email === CloudSync.user?.email) { this.toast('You cannot add yourself!', 'error'); return; }
+    const input = document.getElementById('friend-username-input');
+    const username = input?.value.trim().replace(/^@/, '');
+    if (!username) { this.toast('Enter a friend\'s username', 'error'); return; }
+    if (username.toLowerCase() === (CloudSync.profile?.username || '').toLowerCase()) {
+      this.toast('You cannot add yourself!', 'error'); return;
+    }
     const btn = document.getElementById('btn-add-friend');
     if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
-    const ok = await CloudSync.sendFriendRequest(email);
+    const ok = await CloudSync.sendFriendRequest(username);
     if (btn) { btn.disabled = false; btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg> Add Friend`; }
-    if (ok && emailInput) emailInput.value = '';
+    if (ok && input) input.value = '';
   },
 
   async respondFriend(requestId, accept) {
