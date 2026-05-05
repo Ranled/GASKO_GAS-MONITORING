@@ -91,6 +91,9 @@ CREATE POLICY "Users can delete own fuel_logs" ON fuel_logs FOR DELETE USING (au
 -- =============================================
 
 -- 5. User Profiles table (username, display name, avatar)
+-- Drop old view first if it exists (from a previous migration)
+DROP VIEW IF EXISTS user_profiles;
+
 CREATE TABLE IF NOT EXISTS user_profiles (
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   username TEXT UNIQUE,
